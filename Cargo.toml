@@ -1,12 +1,12 @@
 [package]
 name = "mut_set"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "MIT"
 authors = ["Junzhuo <zhou@junzhuo.site>"]
-description = "Safe Implementation for Mutable Hashset"
+description = "A safe implementation for mutable hashset!"
 keywords = [
-    "mutable", 
+    "mutable",
     "hashset",
 ]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
