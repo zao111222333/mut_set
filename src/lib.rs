@@ -946,7 +946,7 @@ where
         F: FnMut(&T) -> bool,
     {
         let mut f_mut = f;
-        self.inner.retain(|k:&u64, v:&mut T::ItemImmutId|
+        self.inner.retain(|_:&u64, v:&mut T::ItemImmutId|
             f_mut(Deref::deref(&*v))
         )
     }
@@ -1045,75 +1045,3 @@ where
         self.inner.hasher()
     }
 }
-
-
-// impl core::ops::Deref for GroupSet {
-//     type Target = HashMap<u64,MyGroupImmutId>;
-//     fn deref(&self) -> &Self::Target {
-//         &self.inner
-//     }
-// }
-
-
-// use std::{collections::HashMap, hash::Hash};
-// #[cfg(not(doc))]
-// #[repr(C)]
-// pub struct MyGroup {
-//     id1: usize,
-//     pub id2: String,
-//     pub ctx1: isize,
-//     pub ctx2: String,
-// }
-// #[automatically_derived]
-// impl ::core::default::Default for MyGroup {
-//     #[inline]
-//     fn default() -> MyGroup {
-//         MyGroup {
-//             id1: ::core::default::Default::default(),
-//             id2: ::core::default::Default::default(),
-//             ctx1: ::core::default::Default::default(),
-//             ctx2: ::core::default::Default::default(),
-//         }
-//     }
-// }
-// const _: () = {
-//     #[doc(hidden)]
-//     #[repr(C)]
-//     pub struct ReadOnlyMyGroup {
-//         pub id1: usize,
-//         pub id2: String,
-//         pub ctx1: isize,
-//         pub ctx2: String,
-//     }
-//     #[automatically_derived]
-//     impl ::core::default::Default for ReadOnlyMyGroup {
-//         #[inline]
-//         fn default() -> ReadOnlyMyGroup {
-//             ReadOnlyMyGroup {
-//                 id1: ::core::default::Default::default(),
-//                 id2: ::core::default::Default::default(),
-//                 ctx1: ::core::default::Default::default(),
-//                 ctx2: ::core::default::Default::default(),
-//             }
-//         }
-//     }
-//     #[doc(hidden)]
-//     impl core::ops::Deref for MyGroup {
-//         type Target = ReadOnlyMyGroup;
-//         fn deref(&self) -> &Self::Target {
-//             unsafe { &*(self as *const Self as *const Self::Target) }
-//         }
-//     }
-// };
-
-pub fn retain<F,T>(f: F)
-where
-    F: FnMut(&T) -> bool,
-{
-    let mut f_mut = f;
-    let _f=|v:&mut T|-> bool {
-        let tt: &T = &*v;
-        f_mut(tt)
-    };
-}
-

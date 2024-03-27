@@ -90,6 +90,7 @@ fn test(){
     }
     for v in set.iter_mut(){
         v.ctx1 = 0;
+        println!("{:?}",v.id1);
         // In `iter_mut` IDs write will be prohibited
         // v.id1 = 0;
     }

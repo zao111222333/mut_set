@@ -4,7 +4,7 @@ version = "0.1.1"
 edition = "2021"
 license = "MIT"
 authors = ["Junzhuo <zhou@junzhuo.site>"]
-description = "A safe implementation for mutable hashset!"
+description = "A safe implementation for HashSet with iter_mut"
 keywords = [
     "mutable",
     "hashset",
