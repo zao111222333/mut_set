@@ -1,6 +1,6 @@
 # mut_set
 
-Use the idea of [readonly](https://crates.io/crates/readonly) to implement hashset with `iter_mut`.
+Use the idea of [readonly](https://crates.io/crates/readonly) to implement HashSet with `iter_mut`.
 
 Add crates by following command
 

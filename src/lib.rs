@@ -40,7 +40,13 @@
 //!         // v.id1 = 0;
 //!     }
 //!     println!("{:?}", set);
-//!     let id1 = MyItem::id(2, "www".to_string());
+//!     println!("{:?}", set.get(&MyItem::id(2, "www".to_string())));
+//!     set.replace(MyItem {
+//!         id1: 1,
+//!         id2: "ww".to_string(),
+//!         ctx1: -2,
+//!         ctx2: "cc".to_string(),
+//!     });
 //!     println!("{:?}", set.get(&id1));
 //!     for v in set.into_iter() {
 //!         println!("{:?}", v);
@@ -103,7 +109,13 @@ where
 ///         // v.id1 = 0;
 ///     }
 ///     println!("{:?}", set);
-///     let id1 = MyItem::id(2, "www".to_string());
+///     println!("{:?}", set.get(&MyItem::id(2, "www".to_string())));
+///     set.replace(MyItem {
+///         id1: 1,
+///         id2: "ww".to_string(),
+///         ctx1: -2,
+///         ctx2: "cc".to_string(),
+///     });
 ///     println!("{:?}", set.get(&id1));
 ///     for v in set.into_iter() {
 ///         println!("{:?}", v);

@@ -11,7 +11,7 @@ repository.workspace = true
 documentation.workspace = true
 
 [workspace.package]
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 license = "MIT"
 authors = ["Junzhuo <zhou@junzhuo.site>"]
@@ -22,7 +22,7 @@ keywords = [
     "iter_mut",
 ]
 readme = "README.md"
-repository = "https://github.com/zao111222333/MutSet-rs/"
+repository = "https://github.com/zao111222333/mut_set"
 documentation = "https://docs.rs/mut_set"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
