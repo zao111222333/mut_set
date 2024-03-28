@@ -1,9 +1,5 @@
-# mut_set
+// cargo expand --manifest-path ./tests/Cargo.toml derive
 
-Use the idea of [readonly](https://crates.io/crates/readonly) to implement hashset with `iter_mut`.
-
-``` rust
-use mut_set::MutSet;
 #[derive(Debug)]
 #[mut_set_derive::item]
 pub(super) struct MyItem<TT: Sized> {
@@ -17,7 +13,7 @@ pub(super) struct MyItem<TT: Sized> {
 
 #[test]
 fn test() {
-    let mut set = MutSet::new();
+    let mut set = mut_set::MutSet::new();
     println!("{:?}", set);
     set.insert(MyItem {
         id1: 2,
@@ -48,8 +44,3 @@ fn test() {
         println!("{:?}", v);
     }
 }
-```
-
-## How can we do that
-
-The macro will implement all staffs as what [tests/src/prototype.rs](tests/src/prototype.rs) dose.

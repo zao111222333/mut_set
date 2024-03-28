@@ -1,5 +1,16 @@
 [package]
 name = "mut_set"
+description.workspace = true
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+keywords.workspace = true
+authors.workspace = true
+readme.workspace = true
+repository.workspace = true
+documentation.workspace = true
+
+[workspace.package]
 version = "0.1.1"
 edition = "2021"
 license = "MIT"
@@ -9,6 +20,12 @@ keywords = [
     "mutable",
     "hashset",
 ]
+readme = "README.md"
+repository = "https://github.com/zao111222333/MutSet-rs/"
+documentation = "https://docs.rs/mut_set"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[workspace]
+members = ["derive","tests"]
 
 [dependencies]
