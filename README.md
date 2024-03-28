@@ -8,6 +8,16 @@ Add crates by following command
 cargo add mut_set mut_set_derive
 ```
 
+or add it into `Cargo.toml`
+
+```toml
+[dependencies]
+mut_set = "0.2"
+mut_set_derive = "0.2"
+```
+
+## Demo
+
 ``` rust
 #[derive(Debug)]
 #[mut_set_derive::item]
@@ -58,6 +68,18 @@ fn test() {
 }
 ```
 
-## How can we do that
+## How does `mut_set` implement
 
-The macro will implement all staffs as what [tests/src/prototype.rs](tests/src/prototype.rs) dose.
+The macro will implement all stuffs in [tests/src/prototype.rs](tests/src/prototype.rs).
+
+Take `xxx` as an example:
+
++ Create two struct `xxxImmutId`, and `xxxId`. Where `xxxImmutId` is same to `xxx` with private id fields, and `xxxId` only contains id fields.
++ Do rearrangement so that all id fields are located at beginning of the structure. By the help of `#[repr(C)]`, we can use raw pointer operations to (zero-cost?) convert `xxx`, `xxxImmutId`, and `xxxId`.
++ `impl mut_set::Item for xxx<ItemImmutId = xxxImmutId>`
++ `MutSet<T: Item> = HashMap<u64, T::ItemImmutId>`, where the `u64` is the hash value.
++ Wrap the iteration function
+    + `iter(&self) -> Iter<&xxx>`
+    + `into_iter(self) -> Iter<xxx>`
+    + `iter_mut(&mut self) -> Iter<&mut xxxImmutId>`
+
