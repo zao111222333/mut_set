@@ -17,8 +17,9 @@ license = "MIT"
 authors = ["Junzhuo <zhou@junzhuo.site>"]
 description = "A safe implementation for HashSet with iter_mut"
 keywords = [
-    "mutable",
     "hashset",
+    "mutable",
+    "iter_mut",
 ]
 readme = "README.md"
 repository = "https://github.com/zao111222333/MutSet-rs/"
