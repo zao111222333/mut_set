@@ -4,3 +4,4 @@ name = "tests"
 [dependencies]
 mut_set = { path = ".."}
 mut_set_derive = { path = "../derive"}
+derivative = "2.2.0"

@@ -1,12 +1,15 @@
 // cargo expand --manifest-path ./tests/Cargo.toml derive
 
-#[derive(Debug)]
+#[derive(Debug, derivative::Derivative)]
+#[derivative(Default)]
 #[mut_set_derive::item]
+// #[repr(packed)]
 pub(super) struct MyItem<T1, T2>
 where
     T1: Sized,
 {
     #[id]
+    #[derivative(Default(value = "8"))]
     pub id1: usize,
     pub ctx1: T1,
     pub(in crate::derive) ctx2: T2,

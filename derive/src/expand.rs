@@ -1,5 +1,5 @@
 use proc_macro2::{Span, TokenStream, TokenTree};
-use quote::{format_ident, quote, ToTokens};
+use quote::{quote, ToTokens};
 use syn::visit_mut::{self, VisitMut};
 use syn::{
     parse_quote, token, Data, DeriveInput, Error, Expr, Field, Fields, Ident, Path,
@@ -32,16 +32,26 @@ pub fn readonly(input: DeriveInput) -> Result<TokenStream> {
         #input
     };
 
-    if !has_defined_repr(&input) {
-        input.attrs.push(parse_quote!(#[repr(C)]));
-    }
-
     let mut readonly = input.clone();
     let mut id = input.clone();
-    readonly.attrs.insert(0, parse_quote!(#[doc(hidden)]));
-    readonly.attrs.insert(0, parse_quote!(#[derive(Debug)]));
-    id.attrs.insert(0, parse_quote!(#[doc(hidden)]));
-
+    readonly.attrs.clear();
+    readonly.attrs.push(parse_quote!(#[doc(hidden)]));
+    readonly.attrs.push(parse_quote!(#[derive(Debug)]));
+    id.attrs.clear();
+    id.attrs.push(parse_quote!(#[doc(hidden)]));
+    let repr_vec = has_defined_repr(&input);
+    if repr_vec.len() == 0 {
+        input.attrs.push(parse_quote!(#[repr(C)]));
+        readonly.attrs.push(parse_quote!(#[repr(C)]));
+        id.attrs.push(parse_quote!(#[repr(C)]));
+    } else {
+        for attr in repr_vec {
+            readonly.attrs.push(attr.clone());
+            id.attrs.push(attr);
+        }
+    }
+    // if !has_defined_repr(&input) {
+    // }
     let input_vis = input.vis.clone();
     let v: Visibility = parse_quote!(pub(super));
     if input_vis.to_token_stream().to_string() == v.to_token_stream().to_string() {
@@ -69,7 +79,7 @@ pub fn readonly(input: DeriveInput) -> Result<TokenStream> {
             }
         }
 
-        let (_id_fields, _other_fields) = rearrange_fields(input_fields, &indices);
+        let (_id_fields, _other_fields) = rearrange_fields(input_fields, &indices, false);
         id_fields.clear();
         for f in _id_fields.iter() {
             let t = f.ty.clone();
@@ -82,7 +92,8 @@ pub fn readonly(input: DeriveInput) -> Result<TokenStream> {
             id_func_fields = quote! {#i, #id_func_fields};
             into_fields = quote! {#i:value.#i, #into_fields};
         }
-        for f in _id_fields.into_iter().rev() {
+        for mut f in _id_fields.into_iter().rev() {
+            f.attrs.clear();
             id_fields.push(f);
         }
         for f in _other_fields.into_iter() {
@@ -90,7 +101,7 @@ pub fn readonly(input: DeriveInput) -> Result<TokenStream> {
             into_fields = quote! {#i:value.#i, #into_fields};
         }
 
-        rearrange_fields(readonly_fields, &indices);
+        rearrange_fields(readonly_fields, &indices, true);
     }
     let ident = &input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
@@ -126,6 +137,7 @@ pub fn readonly(input: DeriveInput) -> Result<TokenStream> {
         #input
         #[doc(hidden)]
         mod #mod_name{
+            use super::*;
             use std::{borrow::Borrow, hash::{Hash,Hasher}, ops::Deref};
             #id
             impl #impl_generics Hash for #id_ident #ty_generics #where_clause {
@@ -136,40 +148,40 @@ pub fn readonly(input: DeriveInput) -> Result<TokenStream> {
             }
 
             #readonly
-            impl #impl_generics super::#ident #ty_generics #where_clause {
+            impl #impl_generics #ident #ty_generics #where_clause {
                 #[inline]
                 #readonly_vis fn id(#id_func_input)->#id_ident #ty_generics { #id_ident #id_func}
             }
             #[doc(hidden)]
-            impl #impl_generics Borrow<#id_ident #ty_generics> for super::#ident #ty_generics #where_clause {
+            impl #impl_generics Borrow<#id_ident #ty_generics> for #ident #ty_generics #where_clause {
                 #[inline]
                 fn borrow(&self) -> &#id_ident #ty_generics {
                     unsafe { &*(self as *const Self as *const #id_ident #ty_generics ) }
                 }
             }
-            impl #impl_generics Hash for super::#ident #ty_generics #where_clause {
+            impl #impl_generics Hash for #ident #ty_generics #where_clause {
                 #[inline]
                 fn hash<H: Hasher>(&self, state: &mut H) {
-                    <super::#ident #ty_generics as Borrow<#id_ident #ty_generics>>::borrow(self).hash(state);
+                    <#ident #ty_generics as Borrow<#id_ident #ty_generics>>::borrow(self).hash(state);
                 }
             }
-            impl #impl_generics mut_set::Item for super::#ident #ty_generics #where_clause {
+            impl #impl_generics mut_set::Item for #ident #ty_generics #where_clause {
                     type ItemImmutId = #readonly_ident #ty_generics;
                 }
             impl #impl_generics Deref for #readonly_ident #ty_generics #where_clause {
-                type Target = super::#ident #ty_generics;
+                type Target = #ident #ty_generics;
                 #[inline]
                 fn deref(&self) -> &Self::Target {
                     unsafe { &*(self as *const Self as *const Self::Target) }
                 }
             }
-            impl #impl_generics From<super::#ident #ty_generics> for #readonly_ident #ty_generics #where_clause {
+            impl #impl_generics From<#ident #ty_generics> for #readonly_ident #ty_generics #where_clause {
                 #[inline]
-                fn from(value: super::#ident #ty_generics) -> Self {
+                fn from(value: #ident #ty_generics) -> Self {
                     Self{#into_fields}
                 }
             }
-            impl #impl_generics From<#readonly_ident #ty_generics> for super::#ident #ty_generics #where_clause {
+            impl #impl_generics From<#readonly_ident #ty_generics> for #ident #ty_generics #where_clause {
                 #[inline]
                 fn from(value: #readonly_ident #ty_generics) -> Self {
                     Self{#into_fields}
@@ -180,8 +192,9 @@ pub fn readonly(input: DeriveInput) -> Result<TokenStream> {
     })
 }
 
-fn has_defined_repr(input: &DeriveInput) -> bool {
-    let mut has_defined_repr = false;
+// TODO
+fn has_defined_repr(input: &DeriveInput) -> Vec<syn::Attribute> {
+    let mut repr_vec = vec![];
     for attr in &input.attrs {
         if !attr.path().is_ident("repr") {
             continue;
@@ -192,7 +205,7 @@ fn has_defined_repr(input: &DeriveInput) -> bool {
                 || path.is_ident("transparent")
                 || path.is_ident("packed")
             {
-                has_defined_repr = true;
+                repr_vec.push(attr.clone());
             }
             if meta.input.peek(Token![=]) {
                 let _value: Expr = meta.value()?.parse()?;
@@ -202,7 +215,7 @@ fn has_defined_repr(input: &DeriveInput) -> bool {
             Ok(())
         });
     }
-    has_defined_repr
+    repr_vec
 }
 
 fn fields_of_input(input: &mut DeriveInput) -> &mut Punctuated {
@@ -269,6 +282,7 @@ impl<'a> VisitMut for ReplaceSelf<'a> {
 fn rearrange_fields(
     input_fields: &mut Punctuated,
     indices: &Vec<usize>,
+    clear_attrs: bool,
 ) -> (Vec<Field>, Vec<Field>) {
     let mut in_indices = Vec::new();
     let mut notin_indices = Vec::new();
@@ -287,10 +301,18 @@ fn rearrange_fields(
         }
     }
     for f in in_indices.iter().rev() {
-        input_fields.push(f.clone());
+        let mut _f = f.clone();
+        if clear_attrs {
+            _f.attrs.clear();
+        }
+        input_fields.push(_f);
     }
     for f in notin_indices.iter().rev() {
-        input_fields.push(f.clone());
+        let mut _f = f.clone();
+        if clear_attrs {
+            _f.attrs.clear();
+        }
+        input_fields.push(_f);
     }
     (in_indices, notin_indices)
 }
