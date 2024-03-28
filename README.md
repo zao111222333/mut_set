@@ -9,21 +9,23 @@ cargo add mut_set mut_set_derive
 ```
 
 ``` rust
-use mut_set::MutSet;
 #[derive(Debug)]
 #[mut_set_derive::item]
-pub(super) struct MyItem<TT: Sized> {
+pub(super) struct MyItem<T1, T2>
+where
+    T1: Sized,
+{
     #[id]
     pub id1: usize,
-    pub ctx1: TT,
-    pub(in crate::derive) ctx2: String,
+    pub ctx1: T1,
+    pub(in crate::derive) ctx2: T2,
     #[id]
     pub id2: String,
 }
 
 #[test]
 fn test() {
-    let mut set = MutSet::new();
+    let mut set = mut_set::MutSet::new();
     println!("{:?}", set);
     set.insert(MyItem {
         id1: 2,
