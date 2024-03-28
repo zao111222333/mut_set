@@ -2,6 +2,12 @@
 
 Use the idea of [readonly](https://crates.io/crates/readonly) to implement hashset with `iter_mut`.
 
+Add crates by following command
+
+``` shell
+cargo add mut_set mut_set_derive
+```
+
 ``` rust
 use mut_set::MutSet;
 #[derive(Debug)]
