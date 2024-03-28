@@ -1,5 +1,5 @@
 use proc_macro2::{Span, TokenStream, TokenTree};
-use quote::{quote, ToTokens};
+use quote::{format_ident, quote, ToTokens};
 use syn::visit_mut::{self, VisitMut};
 use syn::{
     parse_quote, token, Data, DeriveInput, Error, Expr, Field, Fields, Ident, Path,
@@ -47,6 +47,8 @@ pub fn readonly(input: DeriveInput) -> Result<TokenStream> {
     if input_vis.to_token_stream().to_string() == v.to_token_stream().to_string() {
         readonly.vis = parse_quote!(pub(in super::super));
     }
+    let readonly_vis = readonly.vis.clone();
+    id.vis = readonly_vis.clone();
 
     let input_fields = fields_of_input(&mut input);
     let readonly_fields = fields_of_input(&mut readonly);
@@ -92,14 +94,18 @@ pub fn readonly(input: DeriveInput) -> Result<TokenStream> {
     }
     let ident = &input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-
+    let _ty_generics: syn::Generics = parse_quote!(#ty_generics);
+    let lt_token = &_ty_generics.lt_token;
+    let gt_token = &_ty_generics.gt_token;
+    let params = &_ty_generics.params;
+    let phantom_type = quote! {#lt_token (#params)#gt_token};
     let id_func = if ty_generics.to_token_stream().is_empty() {
         quote! {{#id_func_fields} }
     } else {
-        id_fields
-            .push(parse_quote!(_p: std::marker::PhantomData #ty_generics #where_clause));
-        id_func_fields = quote! {_p: std::marker::PhantomData :: #ty_generics #where_clause, #id_func_fields};
-        quote! {:: #ty_generics #where_clause{#id_func_fields} }
+        id_fields.push(parse_quote!(_p: std::marker::PhantomData #phantom_type ));
+        id_func_fields =
+            quote! {_p: std::marker::PhantomData :: #phantom_type , #id_func_fields};
+        quote! {:: #ty_generics {#id_func_fields} }
     };
     let self_path: Path = parse_quote!(#ident #ty_generics);
     for field in readonly_fields {
@@ -132,40 +138,40 @@ pub fn readonly(input: DeriveInput) -> Result<TokenStream> {
             #readonly
             impl #impl_generics super::#ident #ty_generics #where_clause {
                 #[inline]
-                pub fn id(#id_func_input)->#id_ident #ty_generics #where_clause{ #id_ident #id_func}
+                #readonly_vis fn id(#id_func_input)->#id_ident #ty_generics { #id_ident #id_func}
             }
             #[doc(hidden)]
-            impl #impl_generics Borrow<#id_ident #ty_generics #where_clause> for super::#ident #ty_generics #where_clause {
+            impl #impl_generics Borrow<#id_ident #ty_generics> for super::#ident #ty_generics #where_clause {
                 #[inline]
-                fn borrow(&self) -> &#id_ident #ty_generics #where_clause {
-                    unsafe { &*(self as *const Self as *const #id_ident #ty_generics #where_clause) }
+                fn borrow(&self) -> &#id_ident #ty_generics {
+                    unsafe { &*(self as *const Self as *const #id_ident #ty_generics ) }
                 }
             }
             impl #impl_generics Hash for super::#ident #ty_generics #where_clause {
                 #[inline]
                 fn hash<H: Hasher>(&self, state: &mut H) {
-                    <super::#ident #ty_generics #where_clause as Borrow<#id_ident #ty_generics #where_clause>>::borrow(self).hash(state);
+                    <super::#ident #ty_generics as Borrow<#id_ident #ty_generics>>::borrow(self).hash(state);
                 }
             }
             impl #impl_generics mut_set::Item for super::#ident #ty_generics #where_clause {
-                    type ItemImmutId = #readonly_ident #ty_generics #where_clause;
+                    type ItemImmutId = #readonly_ident #ty_generics;
                 }
             impl #impl_generics Deref for #readonly_ident #ty_generics #where_clause {
-                type Target = super::#ident #ty_generics #where_clause;
+                type Target = super::#ident #ty_generics;
                 #[inline]
                 fn deref(&self) -> &Self::Target {
                     unsafe { &*(self as *const Self as *const Self::Target) }
                 }
             }
-            impl #impl_generics From<super::#ident #ty_generics #where_clause> for #readonly_ident #ty_generics #where_clause {
+            impl #impl_generics From<super::#ident #ty_generics> for #readonly_ident #ty_generics #where_clause {
                 #[inline]
-                fn from(value: super::#ident #ty_generics #where_clause) -> Self {
+                fn from(value: super::#ident #ty_generics) -> Self {
                     Self{#into_fields}
                 }
             }
-            impl #impl_generics From<#readonly_ident #ty_generics #where_clause> for super::#ident #ty_generics #where_clause {
+            impl #impl_generics From<#readonly_ident #ty_generics> for super::#ident #ty_generics #where_clause {
                 #[inline]
-                fn from(value: #readonly_ident #ty_generics #where_clause) -> Self {
+                fn from(value: #readonly_ident #ty_generics) -> Self {
                     Self{#into_fields}
                 }
             }

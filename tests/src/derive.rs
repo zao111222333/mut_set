@@ -2,11 +2,14 @@
 
 #[derive(Debug)]
 #[mut_set_derive::item]
-pub(super) struct MyItem<TT: Sized> {
+pub(super) struct MyItem<T1, T2>
+where
+    T1: Sized,
+{
     #[id]
     pub id1: usize,
-    pub ctx1: TT,
-    pub(in crate::derive) ctx2: String,
+    pub ctx1: T1,
+    pub(in crate::derive) ctx2: T2,
     #[id]
     pub id2: String,
 }
