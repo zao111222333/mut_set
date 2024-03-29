@@ -39,6 +39,7 @@ pub fn readonly(input: DeriveInput) -> Result<TokenStream> {
     readonly.attrs.push(parse_quote!(#[derive(Debug)]));
     id.attrs.clear();
     id.attrs.push(parse_quote!(#[doc(hidden)]));
+    id.attrs.push(parse_quote!(#[derive(Debug)]));
     let repr_vec = has_defined_repr(&input);
     if repr_vec.len() == 0 {
         input.attrs.push(parse_quote!(#[repr(C)]));
