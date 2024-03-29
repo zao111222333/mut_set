@@ -19,6 +19,7 @@ mod __my_item {
         hash::{Hash, Hasher},
         ops::Deref,
     };
+    #[derive(Debug)]
     #[doc(hidden)]
     #[repr(C)]
     pub(in super::super) struct MyItemId<T1, T2>
