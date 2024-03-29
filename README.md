@@ -76,8 +76,8 @@ Take `xxx` as an example:
 
 + Create two struct `xxxImmutId`, and `xxxId`. Where `xxxImmutId` is same to `xxx` with private id fields, and `xxxId` only contains id fields.
 + Do rearrangement so that all id fields are located at beginning of the structure. By the help of `#[repr(C)]`, we can use raw pointer operations to (zero-cost?) convert `xxx`, `xxxImmutId`, and `xxxId`.
-+ `impl mut_set::Item for xxx<ItemImmutId = xxxImmutId>`
-+ `MutSet<T: Item> = HashMap<u64, T::ItemImmutId>`, where the `u64` is the hash value.
++ `impl mut_set::Item for xxx<ImmutIdItem = xxxImmutId>`
++ `MutSet<T: Item> = HashMap<u64, T::ImmutIdItem>`, where the `u64` is the hash value.
 + Wrap the iteration function
     + `iter(&self) -> Iter<&xxx>`
     + `into_iter(self) -> Iter<xxx>`

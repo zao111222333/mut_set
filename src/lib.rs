@@ -55,6 +55,7 @@
 //! ```
 mod set;
 use std::{
+    borrow::Borrow,
     collections::HashMap,
     hash::{Hash, RandomState},
     ops::Deref,
@@ -64,7 +65,8 @@ pub trait Item
 where
     Self: Hash + Sized,
 {
-    type ItemImmutId: From<Self> + Into<Self> + Deref<Target = Self>;
+    type ImmutIdItem: From<Self> + Into<Self> + Deref<Target = Self>;
+    type Id: Hash + ?Sized;
 }
 
 ///```
@@ -123,5 +125,5 @@ where
 /// }
 /// ```
 pub struct MutSet<T: Item, S = RandomState> {
-    inner: HashMap<u64, T::ItemImmutId, S>,
+    inner: HashMap<u64, T::ImmutIdItem, S>,
 }

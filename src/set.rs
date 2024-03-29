@@ -82,7 +82,7 @@ where
 {
     #[inline]
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
-        let vec: Vec<(u64, T::ItemImmutId)> = iter
+        let vec: Vec<(u64, T::ImmutIdItem)> = iter
             .into_iter()
             .map(|v| (self.hash_one(&v.borrow()), v.into()))
             .collect();
@@ -759,11 +759,11 @@ where
     pub fn into_iter(self) -> impl Iterator<Item = T> {
         self.inner
             .into_iter()
-            .map(|(_, v)| <<T as Item>::ItemImmutId as Into<T>>::into(v))
+            .map(|(_, v)| <<T as Item>::ImmutIdItem as Into<T>>::into(v))
             .into_iter()
     }
     #[inline]
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut <T as Item>::ItemImmutId> {
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut <T as Item>::ImmutIdItem> {
         self.inner.iter_mut().map(|(_, v)| v).into_iter()
     }
 }
@@ -812,7 +812,7 @@ where
     pub fn iter(&self) -> impl Clone + Iterator<Item = &T> {
         self.inner
             .iter()
-            .map(|(_, v)| <<T as Item>::ItemImmutId as core::ops::Deref>::deref(&v))
+            .map(|(_, v)| <<T as Item>::ImmutIdItem as core::ops::Deref>::deref(&v))
             .into_iter()
     }
 
@@ -915,7 +915,7 @@ where
     //         F: FnMut(&T) -> bool,
     //     {
     //         // let mut f_mut = f;
-    //         self.inner.(|k:&u64, v:&mut T::ItemImmutId|
+    //         self.inner.(|k:&u64, v:&mut T::ImmutIdItem|
     //             f_mut(Deref::deref(&*v))
     //         )
     // // pred
@@ -949,7 +949,7 @@ where
     {
         let mut f_mut = f;
         self.inner
-            .retain(|_: &u64, v: &mut T::ItemImmutId| f_mut(Deref::deref(&*v)))
+            .retain(|_: &u64, v: &mut T::ImmutIdItem| f_mut(Deref::deref(&*v)))
     }
 
     /// Clears the set, removing all values.

@@ -3,7 +3,6 @@
 #[derive(Debug, derivative::Derivative)]
 #[derivative(Default)]
 #[mut_set_derive::item]
-// #[repr(packed)]
 pub(super) struct MyItem<T1, T2>
 where
     T1: Sized,

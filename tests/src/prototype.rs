@@ -1,9 +1,11 @@
-#[derive(Debug)]
+#[derive(Debug, derivative::Derivative)]
+#[derivative(Default)]
 #[repr(C)]
 pub(super) struct MyItem<T1, T2>
 where
     T1: Sized,
 {
+    #[derivative(Default(value = "8"))]
     pub id1: usize,
     pub id2: String,
     pub ctx1: T1,
@@ -11,12 +13,12 @@ where
 }
 #[doc(hidden)]
 mod __my_item {
+    use super::*;
     use std::{
         borrow::Borrow,
         hash::{Hash, Hasher},
         ops::Deref,
     };
-    #[derive(Debug)]
     #[doc(hidden)]
     #[repr(C)]
     pub(in super::super) struct MyItemId<T1, T2>
@@ -40,7 +42,7 @@ mod __my_item {
     #[derive(Debug)]
     #[doc(hidden)]
     #[repr(C)]
-    pub(in super::super) struct MyItemImmutId<T1, T2>
+    pub(in super::super) struct ImmutIdMyItem<T1, T2>
     where
         T1: Sized,
     {
@@ -49,7 +51,8 @@ mod __my_item {
         pub ctx1: T1,
         pub(in crate::prototype) ctx2: T2,
     }
-    impl<T1, T2> super::MyItem<T1, T2>
+
+    impl<T1, T2> MyItem<T1, T2>
     where
         T1: Sized,
     {
@@ -59,7 +62,7 @@ mod __my_item {
         }
     }
     #[doc(hidden)]
-    impl<T1, T2> Borrow<MyItemId<T1, T2>> for super::MyItem<T1, T2>
+    impl<T1, T2> Borrow<MyItemId<T1, T2>> for MyItem<T1, T2>
     where
         T1: Sized,
     {
@@ -68,37 +71,38 @@ mod __my_item {
             unsafe { &*(self as *const Self as *const MyItemId<T1, T2>) }
         }
     }
-    impl<T1, T2> Hash for super::MyItem<T1, T2>
+    impl<T1, T2> Hash for MyItem<T1, T2>
     where
         T1: Sized,
     {
         #[inline]
         fn hash<H: Hasher>(&self, state: &mut H) {
-            <super::MyItem<T1, T2> as Borrow<MyItemId<T1, T2>>>::borrow(self).hash(state);
+            <MyItem<T1, T2> as Borrow<MyItemId<T1, T2>>>::borrow(self).hash(state);
         }
     }
-    impl<T1, T2> mut_set::Item for super::MyItem<T1, T2>
+    impl<T1, T2> mut_set::Item for MyItem<T1, T2>
     where
         T1: Sized,
     {
-        type ItemImmutId = MyItemImmutId<T1, T2>;
+        type ImmutIdItem = ImmutIdMyItem<T1, T2>;
+        type Id = MyItemId<T1, T2>;
     }
-    impl<T1, T2> Deref for MyItemImmutId<T1, T2>
+    impl<T1, T2> Deref for ImmutIdMyItem<T1, T2>
     where
         T1: Sized,
     {
-        type Target = super::MyItem<T1, T2>;
+        type Target = MyItem<T1, T2>;
         #[inline]
         fn deref(&self) -> &Self::Target {
             unsafe { &*(self as *const Self as *const Self::Target) }
         }
     }
-    impl<T1, T2> From<super::MyItem<T1, T2>> for MyItemImmutId<T1, T2>
+    impl<T1, T2> From<MyItem<T1, T2>> for ImmutIdMyItem<T1, T2>
     where
         T1: Sized,
     {
         #[inline]
-        fn from(value: super::MyItem<T1, T2>) -> Self {
+        fn from(value: MyItem<T1, T2>) -> Self {
             Self {
                 ctx1: value.ctx1,
                 ctx2: value.ctx2,
@@ -107,12 +111,12 @@ mod __my_item {
             }
         }
     }
-    impl<T1, T2> From<MyItemImmutId<T1, T2>> for super::MyItem<T1, T2>
+    impl<T1, T2> From<ImmutIdMyItem<T1, T2>> for MyItem<T1, T2>
     where
         T1: Sized,
     {
         #[inline]
-        fn from(value: MyItemImmutId<T1, T2>) -> Self {
+        fn from(value: ImmutIdMyItem<T1, T2>) -> Self {
             Self {
                 ctx1: value.ctx1,
                 ctx2: value.ctx2,
@@ -150,8 +154,14 @@ fn test() {
         // v.id1 = 0;
     }
     println!("{:?}", set);
-    let id1 = MyItem::id(2, "www".to_string());
-    println!("{:?}", set.get(&id1));
+    println!("{:?}", set.get(&MyItem::id(2, "www".to_string())));
+    set.replace(MyItem {
+        id1: 1,
+        id2: "ww".to_string(),
+        ctx1: -2,
+        ctx2: "cc".to_string(),
+    });
+    println!("{:?}", set);
     for v in set.into_iter() {
         println!("{:?}", v);
     }

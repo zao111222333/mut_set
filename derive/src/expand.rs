@@ -123,7 +123,7 @@ pub fn readonly(input: DeriveInput) -> Result<TokenStream> {
         ReplaceSelf::new(&self_path).visit_type_mut(&mut field.ty);
     }
 
-    readonly.ident = Ident::new(&format!("{}ImmutId", input.ident), call_site);
+    readonly.ident = Ident::new(&format!("ImmutId{}", input.ident), call_site);
     id.ident = Ident::new(&format!("{}Id", input.ident), call_site);
     let readonly_ident = &readonly.ident;
     let id_ident = &id.ident;
@@ -166,7 +166,8 @@ pub fn readonly(input: DeriveInput) -> Result<TokenStream> {
                 }
             }
             impl #impl_generics mut_set::Item for #ident #ty_generics #where_clause {
-                    type ItemImmutId = #readonly_ident #ty_generics;
+                    type ImmutIdItem = #readonly_ident #ty_generics;
+                    type Id = #id_ident #ty_generics;
                 }
             impl #impl_generics Deref for #readonly_ident #ty_generics #where_clause {
                 type Target = #ident #ty_generics;
