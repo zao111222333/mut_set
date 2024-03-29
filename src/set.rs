@@ -5,6 +5,15 @@ use std::{
     hash::{BuildHasher, Hash, RandomState},
     ops::Deref,
 };
+impl<T, Q> Clone for MutSet<T>
+where
+    T: Item<ImmutIdItem = Q> + Clone,
+    Q: Clone,
+{
+    fn clone(&self) -> Self {
+        Self { inner: self.inner.clone() }
+    }
+}
 
 impl<T: Item + std::fmt::Debug> std::fmt::Debug for MutSet<T> {
     #[inline]
