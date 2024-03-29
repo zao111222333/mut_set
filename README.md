@@ -68,18 +68,40 @@ fn test() {
 }
 ```
 
-## How does `mut_set` implement
+## How does `mut_set` work
 
 The macro will implement all stuffs in [tests/src/prototype.rs](tests/src/prototype.rs).
 
-Take `xxx` as an example:
+Take `Xxx` as an example:
 
-+ Create two struct `xxxImmutId`, and `xxxId`. Where `xxxImmutId` is same to `xxx` with private id fields, and `xxxId` only contains id fields.
-+ Do rearrangement so that all id fields are located at beginning of the structure. By the help of `#[repr(C)]`, we can use raw pointer operations to (zero-cost?) convert `xxx`, `xxxImmutId`, and `xxxId`.
-+ `impl mut_set::Item for xxx<ImmutIdItem = xxxImmutId>`
++ Create two struct `ImmutIdXxx`, and `XxxId`. Where `ImmutIdXxx` is same to `Xxx` with private id fields, and `XxxId` only contains id fields.
++ Do rearrangement so that all id fields are located at beginning of the structure. By the help of `#[repr(C)]`, we can use raw pointer operations to (zero-cost?) convert `Xxx`, `ImmutIdXxx`, and `XxxId`.
++ `impl mut_set::Item for Xxx<ImmutIdItem = ImmutIdXxx>`
 + `MutSet<T: Item> = HashMap<u64, T::ImmutIdItem>`, where the `u64` is the hash value.
 + Wrap the iteration function
-    + `iter(&self) -> Iter<&xxx>`
-    + `into_iter(self) -> Iter<xxx>`
-    + `iter_mut(&mut self) -> Iter<&mut xxxImmutId>`
+    + `iter(&self) -> Iter<&Xxx>`
+    + `into_iter(self) -> Iter<Xxx>`
+    + `iter_mut(&mut self) -> Iter<&mut ImmutIdXxx>`
 
+## Other functions
+
++ If you want to add some `derive`/`proc_macro` to `ImmutIdXxx`, and `XxxId`. You can add arguments to `mut_set_derive::item`, and use `;` to separate. e.g.,
+
+    ``` rust
+    #[mut_set_derive::item(derive(Debug, Clone); derive(derivative::Derivative); derivative(Default);)]
+    struct Xxx {}
+    ```
+
+    will impl
+
+    ``` rust
+    #[derive(Debug, Clone)]
+    #[derive(derivative::Derivative)]
+    #[derivative(Default)]
+    struct ImmutIdXxx {}
+
+    #[derive(Debug, Clone)]
+    #[derive(derivative::Derivative)]
+    #[derivative(Default)]
+    struct XxxId {}
+    ```

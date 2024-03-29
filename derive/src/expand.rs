@@ -8,7 +8,7 @@ use syn::{
 
 type Punctuated = syn::punctuated::Punctuated<Field, Token![,]>;
 
-pub fn readonly(input: DeriveInput) -> Result<TokenStream> {
+pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
     let call_site = Span::call_site();
 
     match &input.data {
@@ -31,15 +31,26 @@ pub fn readonly(input: DeriveInput) -> Result<TokenStream> {
         #[cfg(doc)]
         #input
     };
-
     let mut readonly = input.clone();
     let mut id = input.clone();
     readonly.attrs.clear();
-    readonly.attrs.push(parse_quote!(#[doc(hidden)]));
-    readonly.attrs.push(parse_quote!(#[derive(Debug)]));
     id.attrs.clear();
+    readonly.attrs.push(parse_quote!(#[doc(hidden)]));
     id.attrs.push(parse_quote!(#[doc(hidden)]));
-    id.attrs.push(parse_quote!(#[derive(Debug)]));
+    let mut ss: TokenStream = TokenStream::new();
+    for t in args.into_iter() {
+        if t.to_string() == ";" {
+            readonly.attrs.push(parse_quote!(#[#ss]));
+            id.attrs.push(parse_quote!(#[#ss]));
+            ss = TokenStream::new();
+        } else {
+            quote::TokenStreamExt::append(&mut ss, t);
+        }
+    }
+    if !ss.is_empty() {
+        readonly.attrs.push(parse_quote!(#[#ss]));
+        id.attrs.push(parse_quote!(#[#ss]));
+    }
     let repr_vec = has_defined_repr(&input);
     if repr_vec.len() == 0 {
         input.attrs.push(parse_quote!(#[repr(C)]));
@@ -53,13 +64,9 @@ pub fn readonly(input: DeriveInput) -> Result<TokenStream> {
     }
     // if !has_defined_repr(&input) {
     // }
-    let input_vis = input.vis.clone();
-    let v: Visibility = parse_quote!(pub(super));
-    if input_vis.to_token_stream().to_string() == v.to_token_stream().to_string() {
-        readonly.vis = parse_quote!(pub(in super::super));
-    }
+    readonly.vis = to_super(&input.vis);
     let readonly_vis = readonly.vis.clone();
-    id.vis = readonly_vis.clone();
+    id.vis = readonly.vis.clone();
 
     let input_fields = fields_of_input(&mut input);
     let readonly_fields = fields_of_input(&mut readonly);
@@ -73,14 +80,15 @@ pub fn readonly(input: DeriveInput) -> Result<TokenStream> {
             field.vis = Visibility::Inherited;
         }
     } else {
-        for &i in &indices {
-            readonly_fields[i].vis = Visibility::Inherited;
-            if let Visibility::Inherited = input_fields[i].vis {
-                input_fields[i].vis = input_vis.clone();
+        for (i, f) in readonly_fields.iter_mut().enumerate() {
+            if indices.contains(&i) {
+                f.vis = Visibility::Inherited;
+            } else {
+                f.vis = to_super(&f.vis);
             }
         }
 
-        let (_id_fields, _other_fields) = rearrange_fields(input_fields, &indices, false);
+        let (_id_fields, _other_fields) = rearrange_fields(input_fields, &indices);
         id_fields.clear();
         for f in _id_fields.iter() {
             let t = f.ty.clone();
@@ -94,7 +102,8 @@ pub fn readonly(input: DeriveInput) -> Result<TokenStream> {
             into_fields = quote! {#i:value.#i, #into_fields};
         }
         for mut f in _id_fields.into_iter().rev() {
-            f.attrs.clear();
+            // f.attrs.clear();
+            f.vis = to_super(&f.vis);
             id_fields.push(f);
         }
         for f in _other_fields.into_iter() {
@@ -102,7 +111,7 @@ pub fn readonly(input: DeriveInput) -> Result<TokenStream> {
             into_fields = quote! {#i:value.#i, #into_fields};
         }
 
-        rearrange_fields(readonly_fields, &indices, true);
+        rearrange_fields(readonly_fields, &indices);
     }
     let ident = &input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
@@ -284,7 +293,7 @@ impl<'a> VisitMut for ReplaceSelf<'a> {
 fn rearrange_fields(
     input_fields: &mut Punctuated,
     indices: &Vec<usize>,
-    clear_attrs: bool,
+    // clear_attrs: bool,
 ) -> (Vec<Field>, Vec<Field>) {
     let mut in_indices = Vec::new();
     let mut notin_indices = Vec::new();
@@ -304,16 +313,10 @@ fn rearrange_fields(
     }
     for f in in_indices.iter().rev() {
         let mut _f = f.clone();
-        if clear_attrs {
-            _f.attrs.clear();
-        }
         input_fields.push(_f);
     }
     for f in notin_indices.iter().rev() {
         let mut _f = f.clone();
-        if clear_attrs {
-            _f.attrs.clear();
-        }
         input_fields.push(_f);
     }
     (in_indices, notin_indices)
@@ -329,4 +332,45 @@ fn to_snake_case(s: &str) -> String {
         snake_case.push(c.to_lowercase().next().unwrap());
     }
     snake_case
+}
+
+fn to_super(vis: &Visibility) -> Visibility {
+    match vis {
+        Visibility::Restricted(vis_r) => {
+            let path = vis_r.path.to_token_stream().to_string();
+            if path.starts_with("crate") {
+                vis.clone()
+            } else {
+                let mut _vis_r = vis_r.clone();
+                match path.as_str() {
+                    "self" => {
+                        _vis_r.path = parse_quote!(super);
+                        Visibility::Restricted(_vis_r)
+                    }
+                    "super" => {
+                        parse_quote!(pub(in super::super))
+                    }
+                    _ => {
+                        _vis_r.path.segments.push(parse_quote!(super));
+                        Visibility::Restricted(_vis_r)
+                    }
+                }
+            }
+        }
+        _ => vis.clone(),
+    }
+}
+
+#[test]
+fn vis_sup() {
+    fn cmp(origin: Visibility, sup: Visibility) {
+        assert_eq!(
+            to_super(&origin).to_token_stream().to_string(),
+            sup.to_token_stream().to_string()
+        );
+    }
+    cmp(parse_quote!(pub(self)), parse_quote!(pub(super)));
+    cmp(parse_quote!(pub(super)), parse_quote!(pub(in super::super)));
+    cmp(parse_quote!(pub(crate)), parse_quote!(pub(crate)));
+    cmp(parse_quote!(pub(in crate::mod_a)), parse_quote!(pub(in crate::mod_a)));
 }

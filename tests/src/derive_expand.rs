@@ -6,10 +6,10 @@ where
     T1: Sized,
 {
     #[derivative(Default(value = "8"))]
-    pub id1: usize,
+    pub(self) id1: usize,
     pub id2: String,
     pub ctx1: T1,
-    pub(in crate::prototype) ctx2: T2,
+    pub(super) ctx2: T2,
 }
 #[doc(hidden)]
 mod __my_item {
@@ -19,17 +19,21 @@ mod __my_item {
         hash::{Hash, Hasher},
         ops::Deref,
     };
-    #[derive(Debug)]
     #[doc(hidden)]
+    #[derive(Debug, Clone)]
+    #[derive(derivative::Derivative)]
+    #[derivative(Default)]
     #[repr(C)]
     pub(in super::super) struct MyItemId<T1, T2>
     where
         T1: Sized,
     {
-        pub id1: usize,
+        #[derivative(Default(value = "8"))]
+        pub(super) id1: usize,
         pub id2: String,
         _p: std::marker::PhantomData<(T1, T2)>,
     }
+
     impl<T1, T2> Hash for MyItemId<T1, T2>
     where
         T1: Sized,
@@ -40,19 +44,21 @@ mod __my_item {
             Hash::hash(&self.id1, state);
         }
     }
-    #[derive(Debug)]
     #[doc(hidden)]
+    #[derive(Debug, Clone)]
+    #[derive(derivative::Derivative)]
+    #[derivative(Default)]
     #[repr(C)]
     pub(in super::super) struct ImmutIdMyItem<T1, T2>
     where
         T1: Sized,
     {
+        #[derivative(Default(value = "8"))]
         id1: usize,
         id2: String,
-        pub ctx1: T1,
-        pub(in crate::prototype) ctx2: T2,
+        pub(crate) ctx1: T1,
+        pub(in super::super) ctx2: T2,
     }
-
     impl<T1, T2> MyItem<T1, T2>
     where
         T1: Sized,
@@ -125,45 +131,5 @@ mod __my_item {
                 id2: value.id2,
             }
         }
-    }
-}
-
-#[test]
-fn test() {
-    let mut set = mut_set::MutSet::new();
-    println!("{:?}", set);
-    set.insert(MyItem {
-        id1: 2,
-        id2: "www".to_string(),
-        ctx1: -1,
-        ctx2: "ccc".to_string(),
-    });
-    set.insert(MyItem {
-        id1: 1,
-        id2: "ww".to_string(),
-        ctx1: -2,
-        ctx2: "cc".to_string(),
-    });
-    println!("{:?}", set);
-    for v in set.iter() {
-        println!("{:?}", v);
-    }
-    for v in set.iter_mut() {
-        v.ctx1 = 0;
-        println!("{:?}", v.id1);
-        // In `iter_mut` IDs write will be prohibited
-        // v.id1 = 0;
-    }
-    println!("{:?}", set);
-    println!("{:?}", set.get(&MyItem::id(2, "www".to_string())));
-    set.replace(MyItem {
-        id1: 1,
-        id2: "ww".to_string(),
-        ctx1: -2,
-        ctx2: "cc".to_string(),
-    });
-    println!("{:?}", set);
-    for v in set.into_iter() {
-        println!("{:?}", v);
     }
 }
