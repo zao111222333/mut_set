@@ -1,3 +1,5 @@
+//! See more at [![github](https://img.shields.io/badge/github-main-blue?logo=github)](https://github.com/zao111222333/mut_set)
+//!
 //!```
 //! #[derive(Debug)]
 //! #[mut_set_derive::item]
@@ -59,10 +61,10 @@ mod expand;
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::parse::Nothing;
 use syn::{parse_macro_input, DeriveInput};
 
-///```
+/// See more at [![github](https://img.shields.io/badge/github-main-blue?logo=github)](https://github.com/zao111222333/mut_set)
+/// ```
 /// #[derive(Debug)]
 /// #[mut_set_derive::item]
 /// pub(super) struct MyItem<T1, T2>

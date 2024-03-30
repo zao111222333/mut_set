@@ -1,8 +1,10 @@
 # mut_set
 
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![mut_set](https://shields.io/crates/v/mut_set.svg?style=flat-square&label=mut_set)](https://crates.io/crates/mut_set)
+[![github](https://img.shields.io/badge/github-main-blue?logo=github)](https://github.com/zao111222333/mut_set)
+[![crates.io](https://shields.io/crates/v/mut_set.svg?style=flat-square&label=crates.io)](https://crates.io/crates/mut_set)
 [![Docs](https://docs.rs/mut_set/badge.svg)](https://docs.rs/mut_set)
+
 
 Use the idea of [readonly](https://crates.io/crates/readonly) to implement HashSet with `iter_mut`.
 
@@ -87,7 +89,7 @@ Take `Xxx` as an example:
   + `into_iter(self) -> Iter<Xxx>`
   + `iter_mut(&mut self) -> Iter<&mut ImmutIdXxx>`
 
-## Other functions
+## Other features
 
 + If you want to add some `derive`/`proc_macro` to `ImmutIdXxx`/`XxxId`. You can add arguments to `mut_set_derive::item`, to specify which `derive` should add to `ImmutIdXxx`/`XxxId`, and the filter for fileds attribute. e.g.,
 
@@ -127,4 +129,4 @@ Take `Xxx` as an example:
     }
     ```
 
-    See more at [tests/src/derive.rs](tests/src/derive.rs) and [tests/src/derive_expand.rs](tests/src/derive_expand.rs).
+    Here `some_attr` is not in `attr_filter()`, so it will be removed. See more at [tests/src/derive.rs](tests/src/derive.rs) and [tests/src/derive_expand.rs](tests/src/derive_expand.rs).

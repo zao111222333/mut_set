@@ -1,3 +1,5 @@
+//! See more at [![github](https://img.shields.io/badge/github-main-blue?logo=github)](https://github.com/zao111222333/mut_set)
+//!
 //!```
 //! #[derive(Debug)]
 //! #[mut_set_derive::item]
@@ -68,6 +70,7 @@ where
     type Id: Hash + ?Sized;
 }
 
+/// See more at [![github](https://img.shields.io/badge/github-main-blue?logo=github)](https://github.com/zao111222333/mut_set)
 ///
 ///```
 /// #[derive(Debug)]
