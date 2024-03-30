@@ -1,9 +1,11 @@
+use std::collections::HashSet;
+
 use proc_macro2::{Span, TokenStream, TokenTree};
 use quote::{quote, ToTokens};
 use syn::visit_mut::{self, VisitMut};
 use syn::{
-    parse_quote, token, Data, DeriveInput, Error, Expr, Field, Fields, Ident, Path,
-    Result, Token, Visibility,
+    parse_quote, token, Attribute, Data, DeriveInput, Error, Expr, Field, Fields, Ident,
+    Path, Result, Token, Visibility,
 };
 
 type Punctuated = syn::punctuated::Punctuated<Field, Token![,]>;
@@ -37,19 +39,24 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
     id.attrs.clear();
     readonly.attrs.push(parse_quote!(#[doc(hidden)]));
     id.attrs.push(parse_quote!(#[doc(hidden)]));
-    let mut ss: TokenStream = TokenStream::new();
-    for t in args.into_iter() {
-        if t.to_string() == ";" {
-            readonly.attrs.push(parse_quote!(#[#ss]));
-            id.attrs.push(parse_quote!(#[#ss]));
-            ss = TokenStream::new();
-        } else {
-            quote::TokenStreamExt::append(&mut ss, t);
+    let (macro_set, attri_set) = parser_args(args)?;
+    let attr_filter_fn = |v: &Vec<Attribute>| -> Vec<Attribute> {
+        let mut _v = vec![];
+        for attr in v.iter() {
+            let s = attr.meta.to_token_stream().to_string();
+            for filter_s in &attri_set {
+                if s.starts_with(filter_s) {
+                    _v.push(attr.clone());
+                    break;
+                }
+            }
         }
-    }
-    if !ss.is_empty() {
-        readonly.attrs.push(parse_quote!(#[#ss]));
-        id.attrs.push(parse_quote!(#[#ss]));
+        _v
+    };
+    for macro_s in macro_set {
+        let m: syn::Meta = syn::parse_str(&macro_s)?;
+        readonly.attrs.push(parse_quote!(#[#m]));
+        id.attrs.push(parse_quote!(#[#m]));
     }
     let repr_vec = has_defined_repr(&input);
     if repr_vec.len() == 0 {
@@ -62,8 +69,6 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
             id.attrs.push(attr);
         }
     }
-    // if !has_defined_repr(&input) {
-    // }
     readonly.vis = to_super(&input.vis);
     let readonly_vis = readonly.vis.clone();
     id.vis = readonly.vis.clone();
@@ -76,43 +81,44 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
     let mut id_hash = quote!();
     let mut into_fields = quote!();
     if indices.is_empty() {
-        for field in input_fields {
-            field.vis = Visibility::Inherited;
-        }
-    } else {
-        for (i, f) in readonly_fields.iter_mut().enumerate() {
-            if indices.contains(&i) {
-                f.vis = Visibility::Inherited;
-            } else {
-                f.vis = to_super(&f.vis);
-            }
-        }
-
-        let (_id_fields, _other_fields) = rearrange_fields(input_fields, &indices);
-        id_fields.clear();
-        for f in _id_fields.iter() {
-            let t = f.ty.clone();
-            let i = f.ident.clone();
-            id_hash = quote! {
-                #id_hash
-                Hash::hash(&self.#i, state);
-            };
-            id_func_input = quote! {#i: #t, #id_func_input};
-            id_func_fields = quote! {#i, #id_func_fields};
-            into_fields = quote! {#i:value.#i, #into_fields};
-        }
-        for mut f in _id_fields.into_iter().rev() {
-            // f.attrs.clear();
-            f.vis = to_super(&f.vis);
-            id_fields.push(f);
-        }
-        for f in _other_fields.into_iter() {
-            let i = f.ident;
-            into_fields = quote! {#i:value.#i, #into_fields};
-        }
-
-        rearrange_fields(readonly_fields, &indices);
+        return Err(Error::new(call_site, "at least specify one `#[id]`"));
     }
+    for (i, f) in readonly_fields.iter_mut().enumerate() {
+        f.attrs = attr_filter_fn(&f.attrs);
+        if indices.contains(&i) {
+            f.vis = Visibility::Inherited;
+        } else {
+            f.vis = to_super(&f.vis);
+        }
+    }
+
+    let (_id_fields, _other_fields) = rearrange_fields(input_fields, &indices);
+    id_fields.clear();
+    for f in _id_fields.iter() {
+        let t = f.ty.clone();
+        let i = f.ident.clone();
+        id_hash = quote! {
+            #id_hash
+            Hash::hash(&self.#i, state);
+        };
+        id_func_input = quote! {#i: #t, #id_func_input};
+        id_func_fields = quote! {#i, #id_func_fields};
+        into_fields = quote! {#i:value.#i, #into_fields};
+    }
+    for mut f in _id_fields.into_iter().rev() {
+        f.attrs = attr_filter_fn(&f.attrs);
+        // .iter()
+        // .filter(|attr| attr.to_token_stream().to_string().starts_with("pat"));
+        f.vis = to_super(&f.vis);
+        id_fields.push(f);
+    }
+    for f in _other_fields.into_iter() {
+        let i = f.ident;
+        into_fields = quote! {#i:value.#i, #into_fields};
+    }
+
+    rearrange_fields(readonly_fields, &indices);
+    // }
     let ident = &input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
     let _ty_generics: syn::Generics = parse_quote!(#ty_generics);
@@ -333,7 +339,6 @@ fn to_snake_case(s: &str) -> String {
     }
     snake_case
 }
-
 fn to_super(vis: &Visibility) -> Visibility {
     match vis {
         Visibility::Restricted(vis_r) => {
@@ -351,7 +356,8 @@ fn to_super(vis: &Visibility) -> Visibility {
                         parse_quote!(pub(in super::super))
                     }
                     _ => {
-                        _vis_r.path.segments.push(parse_quote!(super));
+                        let path = _vis_r.path;
+                        _vis_r.path = parse_quote!(super::#path);
                         Visibility::Restricted(_vis_r)
                     }
                 }
@@ -372,5 +378,119 @@ fn vis_sup() {
     cmp(parse_quote!(pub(self)), parse_quote!(pub(super)));
     cmp(parse_quote!(pub(super)), parse_quote!(pub(in super::super)));
     cmp(parse_quote!(pub(crate)), parse_quote!(pub(crate)));
+    cmp(
+        parse_quote!(pub(in super::self::super)),
+        parse_quote!(pub(in super::super::self::super)),
+    );
     cmp(parse_quote!(pub(in crate::mod_a)), parse_quote!(pub(in crate::mod_a)));
+}
+
+fn parser_args(args: TokenStream) -> Result<(HashSet<String>, HashSet<String>)> {
+    let call_site = proc_macro2::Span::call_site();
+    let mut macro_set = HashSet::new();
+    let mut attri_set = HashSet::new();
+
+    fn process_one(
+        i: &mut proc_macro2::token_stream::IntoIter,
+        t: &str,
+        set: &mut HashSet<String>,
+    ) -> syn::Result<()> {
+        let call_site = Span::call_site();
+        if let Some(arg) = i.next() {
+            let s = arg.to_string();
+            let mut chars = s.chars();
+            if let Some('(') = chars.next() {
+            } else {
+                return Err(Error::new(
+                    call_site,
+                    format!("`{t}` should be surrounded by paren `(` and `)`"),
+                ));
+            }
+            if let Some(')') = chars.next_back() {
+            } else {
+                return Err(Error::new(
+                    call_site,
+                    format!("`{t}` should be surrounded by paren `(` and `)`"),
+                ));
+            }
+            for term in chars.as_str().to_string().replace(" ", "").split(';') {
+                if term != "" {
+                    set.insert(term.to_owned());
+                }
+            }
+            Ok(())
+        } else {
+            return Err(Error::new(call_site, format!("Need terms after `{t}`")));
+        }
+    }
+    let mut i = args.into_iter();
+    if let Some(arg) = i.next() {
+        match arg.to_string().as_str() {
+            "macro" => {
+                process_one(&mut i, "macro", &mut macro_set)?;
+            }
+            "attr_filter" => {
+                process_one(&mut i, "attri", &mut attri_set)?;
+            }
+            _ => {
+                return Err(Error::new(
+                    call_site,
+                    format!(
+                    "macro arguments only support `macro` and `attr_filter`, find `{}`",
+                    arg
+                ),
+                ))
+            }
+        }
+    }
+    if let Some(arg) = i.next() {
+        match arg.to_string().as_str() {
+            "," => (),
+            _ => return Err(Error::new(call_site, format!("want `,` find `{}`", arg))),
+        }
+    }
+    if let Some(arg) = i.next() {
+        match arg.to_string().as_str() {
+            "macro" => {
+                process_one(&mut i, "macro", &mut macro_set)?;
+            }
+            "attr_filter" => {
+                process_one(&mut i, "attr_filter", &mut attri_set)?;
+            }
+            _ => {
+                return Err(Error::new(
+                    call_site,
+                    format!(
+                    "macro arguments only support `macro` and `attr_filter`, find `{}`",
+                    arg
+                ),
+                ))
+            }
+        }
+    }
+    if let Some(arg) = i.next() {
+        return Err(Error::new(call_site, format!("want nothing, find `{}`", arg)));
+    }
+    Ok((macro_set, attri_set))
+}
+#[test]
+fn parser_args_test() {
+    println!(
+        "{:?}",
+        parser_args(quote! {
+        macro ( derive(Debug, Clone);
+        derive(derivative::Derivative);
+        derivative(Default);),
+        attri ( derivative;)
+        })
+    );
+    println!(
+        "{:?}",
+        parser_args(quote! {
+        macro ( derive(Debug, Clone);
+        derive(derivative::Derivative);
+        derivative(Default);)
+        })
+    );
+    println!("{:?}", parser_args(quote! {}));
 }

@@ -1,5 +1,9 @@
 # mut_set
 
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![mut_set](https://shields.io/crates/v/mut_set.svg?style=flat-square&label=mut_set)](https://crates.io/crates/mut_set)
+[![Docs](https://docs.rs/mut_set/badge.svg)](https://docs.rs/mut_set)
+
 Use the idea of [readonly](https://crates.io/crates/readonly) to implement HashSet with `iter_mut`.
 
 Add crates by following command
@@ -70,7 +74,7 @@ fn test() {
 
 ## How does `mut_set` work
 
-The macro will implement all stuffs in [tests/src/prototype.rs](tests/src/prototype.rs).
+The macro will implement all stuffs in [tests/src/basic_expand.rs](tests/src/basic_expand.rs).
 
 Take `Xxx` as an example:
 
@@ -79,17 +83,28 @@ Take `Xxx` as an example:
 + `impl mut_set::Item for Xxx<ImmutIdItem = ImmutIdXxx>`
 + `MutSet<T: Item> = HashMap<u64, T::ImmutIdItem>`, where the `u64` is the hash value.
 + Wrap the iteration function
-    + `iter(&self) -> Iter<&Xxx>`
-    + `into_iter(self) -> Iter<Xxx>`
-    + `iter_mut(&mut self) -> Iter<&mut ImmutIdXxx>`
+  + `iter(&self) -> Iter<&Xxx>`
+  + `into_iter(self) -> Iter<Xxx>`
+  + `iter_mut(&mut self) -> Iter<&mut ImmutIdXxx>`
 
 ## Other functions
 
-+ If you want to add some `derive`/`proc_macro` to `ImmutIdXxx`, and `XxxId`. You can add arguments to `mut_set_derive::item`, and use `;` to separate. e.g.,
++ If you want to add some `derive`/`proc_macro` to `ImmutIdXxx`/`XxxId`. You can add arguments to `mut_set_derive::item`, to specify which `derive` should add to `ImmutIdXxx`/`XxxId`, and the filter for fileds attribute. e.g.,
 
     ``` rust
-    #[mut_set_derive::item(derive(Debug, Clone); derive(derivative::Derivative); derivative(Default);)]
-    struct Xxx {}
+    #[mut_set_derive::item(
+    macro(derive(Debug, Clone);
+          derive(derivative::Derivative);
+          derivative(Default);),
+    attr_filter(derivative;)
+    )]
+    struct Xxx {
+        #[id]
+        id: usize,
+        #[derivative(Default(value = "8"))]
+        #[some_attr]
+        ctx: usize,
+    }
     ```
 
     will impl
@@ -98,10 +113,18 @@ Take `Xxx` as an example:
     #[derive(Debug, Clone)]
     #[derive(derivative::Derivative)]
     #[derivative(Default)]
-    struct ImmutIdXxx {}
+    struct ImmutIdXxx {
+        id: usize,
+        #[derivative(Default(value = "8"))]
+        ctx: usize,
+    }
 
     #[derive(Debug, Clone)]
     #[derive(derivative::Derivative)]
     #[derivative(Default)]
-    struct XxxId {}
+    struct XxxId {
+        id: usize,
+    }
     ```
+
+    See more at [tests/src/derive.rs](tests/src/derive.rs) and [tests/src/derive_expand.rs](tests/src/derive_expand.rs).

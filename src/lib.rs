@@ -55,7 +55,6 @@
 //! ```
 mod set;
 use std::{
-    borrow::Borrow,
     collections::HashMap,
     hash::{Hash, RandomState},
     ops::Deref,
@@ -69,6 +68,7 @@ where
     type Id: Hash + ?Sized;
 }
 
+///
 ///```
 /// #[derive(Debug)]
 /// #[mut_set_derive::item]

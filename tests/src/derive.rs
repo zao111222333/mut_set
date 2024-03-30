@@ -2,7 +2,12 @@
 
 #[derive(Debug, derivative::Derivative)]
 #[derivative(Default)]
-#[mut_set_derive::item(derive(Debug, Clone); derive(derivative::Derivative); derivative(Default);)]
+#[mut_set_derive::item(
+    macro(derive(Debug, Clone);
+          derive(derivative::Derivative);
+          derivative(Default);),
+    attr_filter(derivative;)
+    )]
 pub(super) struct MyItem<T1, T2>
 where
     T1: Sized,
