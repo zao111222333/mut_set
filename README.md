@@ -1,10 +1,9 @@
 # mut_set
 
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![github](https://img.shields.io/badge/github-main-blue?logo=github)](https://github.com/zao111222333/mut_set)
+[![github](https://img.shields.io/badge/repo-main-blue?logo=github)](https://github.com/zao111222333/mut_set)
 [![crates.io](https://shields.io/crates/v/mut_set.svg?style=flat-square&label=crates.io)](https://crates.io/crates/mut_set)
 [![Docs](https://docs.rs/mut_set/badge.svg)](https://docs.rs/mut_set)
-
 
 Use the idea of [readonly](https://crates.io/crates/readonly) to implement HashSet with `iter_mut`.
 
@@ -18,8 +17,8 @@ or add it into `Cargo.toml`
 
 ```toml
 [dependencies]
-mut_set = "0.2"
-mut_set_derive = "0.2"
+mut_set = "0.3"
+mut_set_derive = "0.3"
 ```
 
 ## Demo

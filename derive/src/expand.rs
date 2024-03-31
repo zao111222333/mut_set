@@ -299,7 +299,6 @@ impl<'a> VisitMut for ReplaceSelf<'a> {
 fn rearrange_fields(
     input_fields: &mut Punctuated,
     indices: &Vec<usize>,
-    // clear_attrs: bool,
 ) -> (Vec<Field>, Vec<Field>) {
     let mut in_indices = Vec::new();
     let mut notin_indices = Vec::new();
@@ -307,14 +306,14 @@ fn rearrange_fields(
     while let Some(p) = input_fields.pop() {
         i -= 1;
         match p {
-            syn::punctuated::Pair::Punctuated(f, c) => {
+            syn::punctuated::Pair::Punctuated(f, _) => {
                 if indices.contains(&i) {
                     in_indices.push(f)
                 } else {
                     notin_indices.push(f)
                 }
             }
-            syn::punctuated::Pair::End(f) => todo!(),
+            syn::punctuated::Pair::End(_) => todo!(),
         }
     }
     for f in in_indices.iter().rev() {
