@@ -5,7 +5,7 @@
 [![crates.io](https://shields.io/crates/v/mut_set.svg?style=flat-square&label=crates.io)](https://crates.io/crates/mut_set)
 [![Docs](https://docs.rs/mut_set/badge.svg)](https://docs.rs/mut_set)
 
-Use the idea of [readonly](https://crates.io/crates/readonly) to implement HashSet with `iter_mut`.
+Use the idea of [readonly](https://crates.io/crates/readonly) to implement HashSet with `iter_mut` and `get_mut`.
 
 Add crates by following command
 

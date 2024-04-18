@@ -460,6 +460,36 @@ where
         }
     }
 
+    /// Returns a mutable reference to the value corresponding to the key.
+    ///
+    /// The key may be any borrowed form of the map's key type, but
+    /// [`Hash`] and [`Eq`] on the borrowed form *must* match those for
+    /// the key type.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::collections::HashMap;
+    ///
+    /// let mut map = HashMap::new();
+    /// map.insert(1, "a");
+    /// if let Some(x) = map.get_mut(&1) {
+    ///     *x = "b";
+    /// }
+    /// assert_eq!(map[&1], "b");
+    /// ```
+    #[inline]
+    pub fn get_mut<Q: ?Sized>(
+        &mut self,
+        value: &Q,
+    ) -> Option<&mut <T as Item>::ImmutIdItem>
+    where
+        T: Borrow<Q>,
+        Q: Hash + Eq,
+    {
+        self.inner.get_mut(&self.hash_one(&value))
+    }
+
     // /// Inserts the given `value` into the set if it is not present, then
     // /// returns a reference to the value in the set.
     // ///
