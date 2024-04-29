@@ -39,7 +39,7 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
     id.attrs.clear();
     readonly.attrs.push(parse_quote!(#[doc(hidden)]));
     id.attrs.push(parse_quote!(#[doc(hidden)]));
-    let (macro_set, attri_set) = parser_args(args)?;
+    let (sort, macro_set, attri_set) = parser_args(args)?;
     let attr_filter_fn = |v: &Vec<Attribute>| -> Vec<Attribute> {
         let mut _v = vec![];
         for attr in v.iter() {
@@ -80,6 +80,9 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
     let mut id_func_fields = quote!();
     let mut id_hash = quote!();
     let mut into_fields = quote!();
+    let mut partial_cmp = quote!();
+    let mut cmp = quote!();
+    let mut partial_eq = quote!();
     if indices.is_empty() {
         return Err(Error::new(call_site, "at least specify one `#[id]`"));
     }
@@ -105,10 +108,43 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
         id_func_fields = quote! {#i, #id_func_fields};
         into_fields = quote! {#i:value.#i, #into_fields};
     }
+    if sort {
+        let i = _id_fields[0].ident.clone();
+        partial_eq = quote! {#partial_eq
+            self.#i == other.#i
+        };
+        for f in _id_fields.iter().skip(1) {
+            let i = f.ident.clone();
+            partial_eq = quote! {#partial_eq
+                && self.#i == other.#i
+            };
+        }
+        for f in _id_fields.iter().take(_id_fields.len() - 1) {
+            let i = f.ident.clone();
+            partial_cmp = quote! {#partial_cmp
+                match self.#i.partial_cmp(&other.#i) {
+                    Some(core::cmp::Ordering::Equal) => {}
+                    ord => return ord,
+                }
+            };
+            cmp = quote! {#cmp
+                match self.#i.cmp(&other.#i) {
+                    core::cmp::Ordering::Equal => {}
+                    ord => return ord,
+                }
+            };
+        }
+        let i = _id_fields[_id_fields.len() - 1].ident.clone();
+        partial_cmp = quote! {#partial_cmp
+            self.#i.partial_cmp(&other.#i)
+        };
+        cmp = quote! {#cmp
+            self.#i.cmp(&other.#i)
+        };
+    }
+
     for mut f in _id_fields.into_iter().rev() {
         f.attrs = attr_filter_fn(&f.attrs);
-        // .iter()
-        // .filter(|attr| attr.to_token_stream().to_string().starts_with("pat"));
         f.vis = to_super(&f.vis);
         id_fields.push(f);
     }
@@ -118,7 +154,6 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
     }
 
     rearrange_fields(readonly_fields, &indices);
-    // }
     let ident = &input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
     let _ty_generics: syn::Generics = parse_quote!(#ty_generics);
@@ -147,6 +182,33 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
         Ident::new(&format!("__{}", to_snake_case(&ident.to_string())), call_site);
 
     let attr_errors = attr_errors.iter().map(Error::to_compile_error);
+    let sort_quote = if sort {
+        quote! {
+            #[doc(hidden)]
+            impl #impl_generics PartialEq for #ident #ty_generics #where_clause {
+                #[inline]
+                fn eq(&self, other: &Self) -> bool {
+                    #partial_eq
+                }
+            }
+            #[doc(hidden)]
+            impl #impl_generics Eq for #ident #ty_generics #where_clause {}
+            #[doc(hidden)]
+            impl #impl_generics PartialOrd for #ident #ty_generics #where_clause {
+                fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+                    #partial_cmp
+                }
+            }
+            #[doc(hidden)]
+            impl #impl_generics Ord for #ident #ty_generics #where_clause {
+                fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+                    #cmp
+                }
+            }
+        }
+    } else {
+        quote! {}
+    };
     Ok(quote! {
         #original_input
 
@@ -166,8 +228,13 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
             #readonly
             impl #impl_generics #ident #ty_generics #where_clause {
                 #[inline]
-                #readonly_vis fn id(#id_func_input)->#id_ident #ty_generics { #id_ident #id_func}
+                #readonly_vis fn new_id(#id_func_input)->#id_ident #ty_generics { #id_ident #id_func }
+                #[inline]
+                #readonly_vis fn id(&self)-> &#id_ident #ty_generics { self.borrow() }
             }
+
+            #sort_quote
+
             #[doc(hidden)]
             impl #impl_generics Borrow<#id_ident #ty_generics> for #ident #ty_generics #where_clause {
                 #[inline]
@@ -384,8 +451,9 @@ fn vis_sup() {
     cmp(parse_quote!(pub(in crate::mod_a)), parse_quote!(pub(in crate::mod_a)));
 }
 
-fn parser_args(args: TokenStream) -> Result<(HashSet<String>, HashSet<String>)> {
+fn parser_args(args: TokenStream) -> Result<(bool, HashSet<String>, HashSet<String>)> {
     let call_site = proc_macro2::Span::call_site();
+    let mut sort = false;
     let mut macro_set = HashSet::new();
     let mut attri_set = HashSet::new();
 
@@ -425,6 +493,7 @@ fn parser_args(args: TokenStream) -> Result<(HashSet<String>, HashSet<String>)> 
     let mut i = args.into_iter();
     if let Some(arg) = i.next() {
         match arg.to_string().as_str() {
+            "sort" => sort = true,
             "macro" => {
                 process_one(&mut i, "macro", &mut macro_set)?;
             }
@@ -450,6 +519,33 @@ fn parser_args(args: TokenStream) -> Result<(HashSet<String>, HashSet<String>)> 
     }
     if let Some(arg) = i.next() {
         match arg.to_string().as_str() {
+            "sort" => sort = true,
+            "macro" => {
+                process_one(&mut i, "macro", &mut macro_set)?;
+            }
+            "attr_filter" => {
+                process_one(&mut i, "attr_filter", &mut attri_set)?;
+            }
+            _ => {
+                return Err(Error::new(
+                    call_site,
+                    format!(
+                    "macro arguments only support `macro` and `attr_filter`, find `{}`",
+                    arg
+                ),
+                ))
+            }
+        }
+    }
+    if let Some(arg) = i.next() {
+        match arg.to_string().as_str() {
+            "," => (),
+            _ => return Err(Error::new(call_site, format!("want `,` find `{}`", arg))),
+        }
+    }
+    if let Some(arg) = i.next() {
+        match arg.to_string().as_str() {
+            "sort" => sort = true,
             "macro" => {
                 process_one(&mut i, "macro", &mut macro_set)?;
             }
@@ -470,7 +566,7 @@ fn parser_args(args: TokenStream) -> Result<(HashSet<String>, HashSet<String>)> 
     if let Some(arg) = i.next() {
         return Err(Error::new(call_site, format!("want nothing, find `{}`", arg)));
     }
-    Ok((macro_set, attri_set))
+    Ok((sort, macro_set, attri_set))
 }
 #[test]
 fn parser_args_test() {

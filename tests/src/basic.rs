@@ -43,7 +43,7 @@ fn test() {
         // v.id1 = 0;
     }
     println!("{:?}", set);
-    println!("{:?}", set.get(&MyItem::id(2, "www".to_string())));
+    println!("{:?}", set.get(&MyItem::new_id(2, "www".to_string())));
     set.replace(MyItem {
         id1: 1,
         id2: "ww".to_string(),

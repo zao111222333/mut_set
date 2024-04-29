@@ -3,6 +3,7 @@
 #[derive(Debug, derivative::Derivative)]
 #[derivative(Default)]
 #[mut_set_derive::item(
+    sort,
     macro(derive(Debug, Clone);
           derive(derivative::Derivative);
           derivative(Default);),
@@ -48,7 +49,7 @@ fn test() {
         // v.id1 = 0;
     }
     println!("{:?}", set);
-    println!("{:?}", set.get(&MyItem::id(2, "www".to_string())));
+    println!("{:?}", set.get(&MyItem::new_id(2, "www".to_string())));
     set.replace(MyItem {
         id1: 1,
         id2: "ww".to_string(),
@@ -56,7 +57,9 @@ fn test() {
         ctx2: "cc".to_string(),
     });
     println!("{:?}", set);
-    for v in set.into_iter() {
+    // let a = set.into_iter_sort();
+    for v in set.into_iter_sort() {
+        // for v in set.into_iter() {
         println!("{:?}", v);
     }
 }

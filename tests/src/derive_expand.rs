@@ -64,8 +64,12 @@ mod __my_item {
         T1: Sized,
     {
         #[inline]
-        pub(in super::super) fn id(id1: usize, id2: String) -> MyItemId<T1, T2> {
+        pub(in super::super) fn new_id(id1: usize, id2: String) -> MyItemId<T1, T2> {
             MyItemId::<T1, T2> { _p: std::marker::PhantomData::<(T1, T2)>, id1, id2 }
+        }
+        #[inline]
+        pub(in super::super) fn id(&self) -> &MyItemId<T1, T2> {
+            self.borrow()
         }
     }
     #[doc(hidden)]

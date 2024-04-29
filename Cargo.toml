@@ -11,11 +11,11 @@ repository.workspace = true
 documentation.workspace = true
 
 [workspace.package]
-version = "0.3.1"
+version = "0.3.3"
 edition = "2021"
 license = "MIT"
 authors = ["Junzhuo <zhou@junzhuo.site>"]
-description = "A safe implementation for HashSet with iter_mut"
+description = "A safe implementation for HashSet with iter_mut and get_mut"
 keywords = [
     "hashset",
     "mutable",

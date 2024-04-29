@@ -485,7 +485,7 @@ where
     ) -> Option<&mut <T as Item>::ImmutIdItem>
     where
         T: Borrow<Q>,
-        Q: Hash + Eq,
+        Q: Hash,
     {
         self.inner.get_mut(&self.hash_one(&value))
     }
@@ -1085,5 +1085,56 @@ where
     #[inline]
     pub fn hasher(&self) -> &S {
         self.inner.hasher()
+    }
+}
+
+use std::{cmp::Reverse, collections::BinaryHeap};
+
+impl<T, S> MutSet<T, S>
+where
+    T: Item + Ord,
+{
+    /// into_iter_sort
+    #[inline]
+    pub fn into_iter_sort(self) -> impl Iterator<Item = T> {
+        let mut vec = Vec::from_iter(
+            self.inner
+                .into_iter()
+                .map(|(_, v)| <<T as Item>::ImmutIdItem as Into<T>>::into(v)),
+        );
+        vec.sort();
+        vec.into_iter()
+    }
+    /// iter_sort
+    #[inline]
+    pub fn iter_sort(&self) -> impl Clone + Iterator<Item = &T> {
+        let mut vec = Vec::from_iter(
+            self.inner
+                .iter()
+                .map(|(_, v)| <<T as Item>::ImmutIdItem as core::ops::Deref>::deref(v)),
+        );
+        vec.sort();
+        vec.into_iter()
+    }
+
+    /// into_iter_sort
+    #[inline]
+    pub fn into_iter_sort_reverse(self) -> impl Iterator<Item = T> {
+        let mut vec = Vec::from_iter(
+            self.inner
+                .into_iter()
+                .map(|(_, v)| Reverse(<<T as Item>::ImmutIdItem as Into<T>>::into(v))),
+        );
+        vec.sort();
+        vec.into_iter().map(|v| v.0)
+    }
+    /// iter_sort
+    #[inline]
+    pub fn iter_sort_reverse(&self) -> impl Clone + Iterator<Item = &T> {
+        let mut vec = Vec::from_iter(self.inner.iter().map(|(_, v)| {
+            Reverse(<<T as Item>::ImmutIdItem as core::ops::Deref>::deref(v))
+        }));
+        vec.sort();
+        vec.into_iter().map(|v| v.0)
     }
 }
