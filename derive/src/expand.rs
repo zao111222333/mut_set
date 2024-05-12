@@ -209,6 +209,7 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
     } else {
         quote! {}
     };
+    input.attrs.insert(0, parse_quote!(#[cfg(not(doc))]));
     Ok(quote! {
         #original_input
 
