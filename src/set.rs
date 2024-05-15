@@ -1,3 +1,8 @@
+use serde::{
+    de::{self, value::SeqDeserializer, IntoDeserializer},
+    Deserialize, Deserializer, Serialize, Serializer,
+};
+
 use super::{Item, MutSet};
 use std::{
     borrow::Borrow,
@@ -38,6 +43,17 @@ impl<T: Item> MutSet<T, RandomState> {
         Self {
             inner: HashMap::with_capacity_and_hasher(capacity, Default::default()),
         }
+    }
+}
+
+impl<T, S> From<Vec<T>> for MutSet<T, S>
+where
+    T: Item,
+    S: BuildHasher + Default,
+{
+    #[inline]
+    fn from(value: Vec<T>) -> Self {
+        value.into_iter().collect()
     }
 }
 
@@ -795,12 +811,20 @@ where
     T: Item,
 {
     #[inline]
-    pub fn into_iter(self) -> impl Iterator<Item = T> {
+    pub fn into_iter(self) -> std::vec::IntoIter<T> {
         self.inner
             .into_iter()
             .map(|(_, v)| <<T as Item>::ImmutIdItem as Into<T>>::into(v))
+            .collect::<Vec<_>>()
             .into_iter()
     }
+    // #[inline]
+    // pub fn into_iter(self) -> impl Iterator<Item = T> {
+    //     self.inner
+    //         .into_iter()
+    //         .map(|(_, v)| <<T as Item>::ImmutIdItem as Into<T>>::into(v))
+    //         .into_iter()
+    // }
     #[inline]
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut <T as Item>::ImmutIdItem> {
         self.inner.iter_mut().map(|(_, v)| v).into_iter()
@@ -1136,5 +1160,48 @@ where
         }));
         vec.sort();
         vec.into_iter().map(|v| v.0)
+    }
+}
+
+impl<'de, T, S, E> IntoDeserializer<'de, E> for MutSet<T, S>
+where
+    T: IntoDeserializer<'de, E> + Item,
+    S: BuildHasher,
+    E: de::Error,
+{
+    type Deserializer = SeqDeserializer<<Vec<T> as IntoIterator>::IntoIter, E>;
+    #[inline]
+    fn into_deserializer(self) -> Self::Deserializer {
+        SeqDeserializer::new(self.into_iter())
+    }
+}
+// use serde::ser::SerializeSeq;
+impl<T, S> Serialize for MutSet<T, S>
+where
+    T: Serialize + Item,
+    S: BuildHasher,
+{
+    #[inline]
+    fn serialize<SS: Serializer>(&self, serializer: SS) -> Result<SS::Ok, SS::Error> {
+        // let mut seq = serializer.serialize_seq(Some(self.len()))?;
+        // for (_, v) in self.inner.iter() {
+        //     seq.serialize_element(
+        //         <<T as Item>::ImmutIdItem as core::ops::Deref>::deref(&v),
+        //     )?;
+        // }
+        // seq.end()
+        let v: Vec<&T> = self.iter().collect();
+        v.serialize(serializer)
+    }
+}
+
+impl<'de, T, S> Deserialize<'de> for MutSet<T, S>
+where
+    T: Deserialize<'de> + Item,
+    S: BuildHasher + Default,
+{
+    #[inline]
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(Vec::<T>::deserialize(deserializer)?.into())
     }
 }

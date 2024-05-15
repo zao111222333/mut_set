@@ -11,7 +11,7 @@ repository.workspace = true
 documentation.workspace = true
 
 [workspace.package]
-version = "0.3.4"
+version = "0.3.5"
 edition = "2021"
 license = "MIT"
 authors = ["Junzhuo <zhou@junzhuo.site>"]
@@ -30,3 +30,4 @@ documentation = "https://docs.rs/mut_set"
 members = ["derive","tests"]
 
 [dependencies]
+serde = { version = "1.0" }
