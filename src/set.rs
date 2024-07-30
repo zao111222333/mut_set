@@ -717,9 +717,7 @@ where
             true
         }
     }
-    // pub fn hash_one(&self, v: &T) -> u64 {
-    //     self.inner.hasher().hash_one(v)
-    // }
+
     pub fn hash_one<Q: ?Sized>(&self, v: &Q) -> u64
     where
         T: Borrow<Q>,

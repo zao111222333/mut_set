@@ -3,3 +3,4 @@ mod basic_expand;
 mod derive;
 mod derive_expand;
 mod serde;
+mod single_id;

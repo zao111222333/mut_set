@@ -143,7 +143,7 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
         };
     }
 
-    for mut f in _id_fields.into_iter().rev() {
+    for mut f in _id_fields.clone().into_iter().rev() {
         f.attrs = attr_filter_fn(&f.attrs);
         f.vis = to_super(&f.vis);
         id_fields.push(f);
@@ -168,6 +168,21 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
         id_func_fields =
             quote! {_p: std::marker::PhantomData :: #phantom_type , #id_func_fields};
         quote! {:: #ty_generics {#id_func_fields} }
+    };
+    let borrow_when_single_id = if _id_fields.len() == 1 {
+        let f = _id_fields.first().unwrap();
+        let t = f.ty.clone();
+        let i = f.ident.clone();
+        quote! {
+            impl #impl_generics Borrow<#t> for #ident #ty_generics #where_clause {
+                #[inline]
+                fn borrow(&self) -> &#t {
+                    &self.#i
+                }
+            }
+        }
+    } else {
+        quote!()
     };
     let self_path: Path = parse_quote!(#ident #ty_generics);
     for field in readonly_fields {
@@ -243,6 +258,7 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
                     unsafe { &*(self as *const Self as *const #id_ident #ty_generics ) }
                 }
             }
+            #borrow_when_single_id
             impl #impl_generics Hash for #ident #ty_generics #where_clause {
                 #[inline]
                 fn hash<H: Hasher>(&self, state: &mut H) {
