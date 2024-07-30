@@ -119,22 +119,24 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
                 && self.#i == other.#i
             };
         }
-        for f in _id_fields.iter().take(_id_fields.len() - 1) {
+        for f in _id_fields.iter().skip(1) {
             let i = f.ident.clone();
-            partial_cmp = quote! {#partial_cmp
+            partial_cmp = quote! {
                 match self.#i.partial_cmp(&other.#i) {
                     Some(core::cmp::Ordering::Equal) => {}
                     ord => return ord,
                 }
+                #partial_cmp
             };
-            cmp = quote! {#cmp
+            cmp = quote! {
                 match self.#i.cmp(&other.#i) {
                     core::cmp::Ordering::Equal => {}
                     ord => return ord,
                 }
+                #cmp
             };
         }
-        let i = _id_fields[_id_fields.len() - 1].ident.clone();
+        let i = _id_fields[0].ident.clone();
         partial_cmp = quote! {#partial_cmp
             self.#i.partial_cmp(&other.#i)
         };

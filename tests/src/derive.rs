@@ -20,6 +20,8 @@ where
     pub(super) ctx2: T2,
     #[id]
     pub id2: String,
+    #[id]
+    pub id3: (),
 }
 
 #[test]
@@ -31,12 +33,14 @@ fn test() {
         id2: "www".to_string(),
         ctx1: -1,
         ctx2: "ccc".to_string(),
+        id3: (),
     });
     set.insert(MyItem {
         id1: 1,
         id2: "ww".to_string(),
         ctx1: -2,
         ctx2: "cc".to_string(),
+        id3: (),
     });
     println!("{:?}", set);
     for v in set.iter() {
@@ -49,17 +53,16 @@ fn test() {
         // v.id1 = 0;
     }
     println!("{:?}", set);
-    println!("{:?}", set.get(&MyItem::new_id(2, "www".to_string())));
+    println!("{:?}", set.get(&MyItem::new_id(2, "www".to_string(), ())));
     set.replace(MyItem {
         id1: 1,
         id2: "ww".to_string(),
         ctx1: -2,
         ctx2: "cc".to_string(),
+        id3: (),
     });
     println!("{:?}", set);
-    // let a = set.into_iter_sort();
     for v in set.into_iter_sort() {
-        // for v in set.into_iter() {
         println!("{:?}", v);
     }
 }
