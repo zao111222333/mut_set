@@ -123,7 +123,7 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
             let i = f.ident.clone();
             partial_cmp = quote! {
                 match self.#i.partial_cmp(&other.#i) {
-                    Some(core::cmp::Ordering::Equal) => {}
+                    Some(core::cmp::Ordering::Equal)|None => {}
                     ord => return ord,
                 }
                 #partial_cmp

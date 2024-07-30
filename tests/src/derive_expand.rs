@@ -104,11 +104,11 @@ mod __my_item {
     {
         fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
             match self.id1.partial_cmp(&other.id1) {
-                Some(core::cmp::Ordering::Equal) => {}
+                Some(core::cmp::Ordering::Equal) | None => {}
                 ord => return ord,
             }
             match self.id2.partial_cmp(&other.id2) {
-                Some(core::cmp::Ordering::Equal) => {}
+                Some(core::cmp::Ordering::Equal) | None => {}
                 ord => return ord,
             }
             self.id3.partial_cmp(&other.id3)
