@@ -32,4 +32,4 @@ members = ["derive","tests"]
 [dependencies]
 serde = { version = "1.0" }
 mut_set_derive = { path = "derive" }
-# mut_set_derive = { path = "derive" }
+# mut_set_derive = "0.3.8"

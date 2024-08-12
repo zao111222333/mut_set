@@ -2,7 +2,7 @@
 
 #[derive(Debug, derivative::Derivative)]
 #[derivative(Default)]
-#[mut_set_derive::item(
+#[mut_set::derive::item(
     sort,
     macro(derive(Debug, Clone);
           derive(derivative::Derivative);
