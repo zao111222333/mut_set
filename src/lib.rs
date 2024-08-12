@@ -130,3 +130,7 @@ where
 pub struct MutSet<T: Item, S = RandomState> {
     inner: HashMap<u64, T::ImmutIdItem, S>,
 }
+
+pub mod derive {
+    pub use mut_set_derive::item;
+}
