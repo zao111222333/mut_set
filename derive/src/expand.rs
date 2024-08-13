@@ -80,7 +80,7 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
     let mut id_func_fields = quote!();
     let mut id_hash = quote!();
     let mut into_fields = quote!();
-    let mut cmp = quote!();
+    let mut partial_cmp = quote!();
     let mut partial_eq = quote!();
     if indices.is_empty() {
         return Err(Error::new(call_site, "at least specify one `#[id]`"));
@@ -120,17 +120,17 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
         }
         for f in _id_fields.iter().skip(1) {
             let i = f.ident.clone();
-            cmp = quote! {
-                match self.#i.cmp(&other.#i) {
-                    core::cmp::Ordering::Equal => {}
+            partial_cmp = quote! {
+                match self.#i.partial_cmp(&other.#i) {
+                    Some(core::cmp::Ordering::Equal)|None => {}
                     ord => return ord,
                 }
-                #cmp
+                #partial_cmp
             };
         }
         let i = _id_fields[0].ident.clone();
-        cmp = quote! {#cmp
-            self.#i.cmp(&other.#i)
+        partial_cmp = quote! {#partial_cmp
+            self.#i.partial_cmp(&other.#i)
         };
     }
 
@@ -202,13 +202,13 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
             #[doc(hidden)]
             impl #impl_generics PartialOrd for #ident #ty_generics #where_clause {
                 fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-                    Some(self.cmp(other))
+                    #partial_cmp
                 }
             }
             #[doc(hidden)]
             impl #impl_generics Ord for #ident #ty_generics #where_clause {
                 fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-                    #cmp
+                    self.partial_cmp(other).unwrap_or(std::cmp::Ordering::Equal)
                 }
             }
         }
