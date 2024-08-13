@@ -1,6 +1,6 @@
 // cargo expand --manifest-path ./tests/Cargo.toml derive
 
-#[derive(Debug, derivative::Derivative)]
+#[derive(Debug, derivative::Derivative, Clone)]
 #[derivative(Default)]
 #[mut_set::derive::item(
     sort,
@@ -35,13 +35,14 @@ fn test() {
         ctx2: "ccc".to_string(),
         id3: (),
     });
-    set.insert(MyItem {
+    let old_iterm = MyItem {
         id1: 1,
         id2: "ww".to_string(),
         ctx1: -2,
         ctx2: "cc".to_string(),
         id3: (),
-    });
+    };
+    assert!(set.insert(old_iterm.clone()));
     println!("{:?}", set);
     for v in set.iter() {
         println!("{:?}", v);
@@ -54,13 +55,16 @@ fn test() {
     }
     println!("{:?}", set);
     println!("{:?}", set.get(&MyItem::new_id(2, "www".to_string(), ())));
-    set.replace(MyItem {
+    let new_item = MyItem {
         id1: 1,
         id2: "ww".to_string(),
         ctx1: -2,
-        ctx2: "cc".to_string(),
+        ctx2: "cccc".to_string(),
         id3: (),
-    });
+    };
+    assert_eq!(set.get(&old_iterm), Some(&old_iterm));
+    assert_eq!(set.replace(new_item.clone()), Some(old_iterm));
+    assert_eq!(set.get(&new_item), Some(&new_item));
     println!("{:?}", set);
     for v in set.into_iter_sort() {
         println!("{:?}", v);

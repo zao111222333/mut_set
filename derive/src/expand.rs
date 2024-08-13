@@ -224,7 +224,7 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
         #[doc(hidden)]
         mod #mod_name{
             use super::*;
-            use std::{borrow::Borrow, hash::{Hash,Hasher}, ops::Deref};
+            use std::{borrow::Borrow, hash::{Hash,Hasher}, ops::{Deref}};
             #id
             impl #impl_generics Hash for #id_ident #ty_generics #where_clause {
                 #[inline]
@@ -238,7 +238,7 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
                 #[inline]
                 #readonly_vis fn new_id(#id_func_input)->#id_ident #ty_generics { #id_ident #id_func }
                 #[inline]
-                #readonly_vis fn id(&self)-> &#id_ident #ty_generics { self.borrow() }
+                #readonly_vis fn id(&self)-> &#id_ident #ty_generics { <#ident #ty_generics as Borrow<#id_ident #ty_generics>>::borrow(self) }
             }
             #sort_quote
 
@@ -267,16 +267,11 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
                     unsafe { &*(self as *const Self as *const Self::Target) }
                 }
             }
-            impl #impl_generics From<#ident #ty_generics> for #readonly_ident #ty_generics #where_clause {
+            impl #impl_generics mut_set::MutSetDeref for #ident #ty_generics #where_clause {
+                type Target = #readonly_ident #ty_generics;
                 #[inline]
-                fn from(value: #ident #ty_generics) -> Self {
-                    Self{#into_fields}
-                }
-            }
-            impl #impl_generics From<#readonly_ident #ty_generics> for #ident #ty_generics #where_clause {
-                #[inline]
-                fn from(value: #readonly_ident #ty_generics) -> Self {
-                    Self{#into_fields}
+                fn mut_set_deref(&mut self) -> &mut Self::Target {
+                    unsafe { &mut *(self as *mut Self as *mut Self::Target) }
                 }
             }
         }
@@ -373,7 +368,7 @@ impl<'a> VisitMut for ReplaceSelf<'a> {
 
 fn rearrange_fields(
     input_fields: &mut Punctuated,
-    indices: &Vec<usize>,
+    indices: &[usize],
 ) -> (Vec<Field>, Vec<Field>) {
     let mut in_indices = Vec::new();
     let mut notin_indices = Vec::new();
@@ -495,7 +490,7 @@ fn parser_args(args: TokenStream) -> Result<(bool, HashSet<String>, HashSet<Stri
                 ));
             }
             for term in chars.as_str().to_string().replace(" ", "").split(';') {
-                if term != "" {
+                if !term.is_empty() {
                     set.insert(term.to_owned());
                 }
             }

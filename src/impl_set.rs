@@ -1,11 +1,16 @@
+use crate::MutSetDeref;
+
 use super::{Item, MutSet};
 use core::{
     borrow::Borrow,
     hash::{BuildHasher, Hash},
-    ops::Deref,
+    iter::Map,
 };
 use std::{
-    collections::{HashMap, HashSet, TryReserveError},
+    collections::{
+        hash_map::{Entry, IntoValues, Values},
+        HashMap, HashSet, TryReserveError,
+    },
     hash::RandomState,
 };
 impl<T, Q> Clone for MutSet<T>
@@ -205,101 +210,6 @@ where
     pub fn shrink_to(&mut self, min_capacity: usize) {
         self.inner.shrink_to(min_capacity)
     }
-
-    // /// Visits the values representing the difference,
-    // /// i.e., the values that are in `self` but not in `other`.
-    // ///
-    // /// # Examples
-    // ///
-    // /// ```
-    // /// use std::collections::HashSet;
-    // /// let a = HashSet::from([1, 2, 3]);
-    // /// let b = HashSet::from([4, 2, 3, 4]);
-    // ///
-    // /// // Can be seen as `a - b`.
-    // /// for x in a.difference(&b) {
-    // ///     println!("{x}"); // Print 1
-    // /// }
-    // ///
-    // /// let diff: HashSet<_> = a.difference(&b).collect();
-    // /// assert_eq!(diff, [1].iter().collect());
-    // ///
-    // /// // Note that difference is not symmetric,
-    // /// // and `b - a` means something else:
-    // /// let diff: HashSet<_> = b.difference(&a).collect();
-    // /// assert_eq!(diff, [4].iter().collect());
-    // /// ```
-    // #[inline]
-    // pub fn difference<'a>(&'a self, other: &'a MutSet<T, S>) -> Difference<'a, T, S> {
-    //     // let x = self.iter().collect::<HashSet<&'a T,S>>();
-    //     // x.difference(other.iter().collect::<HashSet<T,S>>())
-    //     Difference { iter: Box::new(self.iter()), other }
-    // }
-
-    // /// Visits the values representing the intersection,
-    // /// i.e., the values that are both in `self` and `other`.
-    // ///
-    // /// When an equal element is present in `self` and `other`
-    // /// then the resulting `Intersection` may yield references to
-    // /// one or the other. This can be relevant if `T` contains fields which
-    // /// are not compared by its `Eq` implementation, and may hold different
-    // /// value between the two equal copies of `T` in the two sets.
-    // ///
-    // /// # Examples
-    // ///
-    // /// ```
-    // /// use std::collections::HashSet;
-    // /// let a = HashSet::from([1, 2, 3]);
-    // /// let b = HashSet::from([4, 2, 3, 4]);
-    // ///
-    // /// // Print 2, 3 in arbitrary order.
-    // /// for x in a.intersection(&b) {
-    // ///     println!("{x}");
-    // /// }
-    // ///
-    // /// let intersection: HashSet<_> = a.intersection(&b).collect();
-    // /// assert_eq!(intersection, [2, 3].iter().collect());
-    // /// ```
-    // #[inline]
-    // pub fn intersection<'a>(&'a self, other: &'a MutSet<T, S>) -> Intersection<'a, T, S> {
-    //     let x = self.iter().collect::<HashSet<T,S>>();
-    //     x.intersection(other.iter().collect::<HashSet<T,S>>())
-    //     // if self.len() <= other.len() {
-    //     //     Intersection { iter: self.iter(), other }
-    //     // } else {
-    //     //     Intersection { iter: other.iter(), other: self }
-    //     // }
-    // }
-
-    // /// Visits the values representing the union,
-    // /// i.e., all the values in `self` or `other`, without duplicates.
-    // ///
-    // /// # Examples
-    // ///
-    // /// ```
-    // /// use std::collections::HashSet;
-    // /// let a = HashSet::from([1, 2, 3]);
-    // /// let b = HashSet::from([4, 2, 3, 4]);
-    // ///
-    // /// // Print 1, 2, 3, 4 in arbitrary order.
-    // /// for x in a.union(&b) {
-    // ///     println!("{x}");
-    // /// }
-    // ///
-    // /// let union: HashSet<_> = a.union(&b).collect();
-    // /// assert_eq!(union, [1, 2, 3, 4].iter().collect());
-    // /// ```
-    // #[inline]
-    // pub fn union<'a>(&'a self, other: &'a MutSet<T, S>) -> Union<'a, T, S> {
-    //     let x = self.iter().collect::<HashSet<T,S>>();
-    //     x.union(other.iter().collect::<HashSet<T,S>>())
-    //     // if self.len() >= other.len() {
-    //     //     Union { iter: self.iter().chain(other.difference(self)) }
-    //     // } else {
-    //     //     Union { iter: other.iter().chain(self.difference(other)) }
-    //     // }
-    // }
-
     /// Returns `true` if the set contains a value.
     ///
     /// The value may be any borrowed form of the set's value type, but
@@ -376,7 +286,9 @@ where
         T: Borrow<Q>,
         Q: Hash + ?Sized,
     {
-        self.inner.get_mut(&self.hash_one(value))
+        self.inner
+            .get_mut(&self.hash_one(value))
+            .map(MutSetDeref::mut_set_deref)
     }
 
     // /// Inserts the given `value` into the set if it is not present, then
@@ -583,8 +495,8 @@ where
     #[inline]
     pub fn insert(&mut self, v: T) -> bool {
         let key = self.hash_one(&v);
-        if let std::collections::hash_map::Entry::Vacant(e) = self.inner.entry(key) {
-            e.insert(v.into());
+        if let Entry::Vacant(e) = self.inner.entry(key) {
+            e.insert(v);
             true
         } else {
             false
@@ -616,9 +528,7 @@ where
     /// ```
     #[inline]
     pub fn replace(&mut self, value: T) -> Option<T> {
-        self.inner
-            .insert(self.hash_one(&value), value.into())
-            .map(Into::<T>::into)
+        self.inner.insert(self.hash_one(&value), value)
     }
 
     /// Removes a value from the set. Returns whether the value was
@@ -673,40 +583,46 @@ where
     }
 }
 
-impl<T, S> Iterator for MutSet<T, S>
+impl<T, S> IntoIterator for MutSet<T, S>
 where
     T: Item,
     S: BuildHasher,
 {
     type Item = T;
 
+    type IntoIter = IntoValues<u64, T>;
     #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        self.inner
-            .keys()
-            .next()
-            .copied()
-            .and_then(|k| self.inner.remove(&k))
-            .map(<<T as Item>::ImmutIdItem as Into<T>>::into)
+    fn into_iter(self) -> Self::IntoIter {
+        self.inner.into_values()
     }
 }
 
+impl<'a, T, S> IntoIterator for &'a MutSet<T, S>
+where
+    T: Item,
+    S: BuildHasher,
+{
+    type Item = &'a T;
+    type IntoIter = Values<'a, u64, T>;
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        self.inner.values()
+    }
+}
+
+type ValuesMut<'a, T> = Map<
+    std::collections::hash_map::ValuesMut<'a, u64, T>,
+    fn(&mut T) -> &mut <T as MutSetDeref>::Target,
+>;
 impl<T, S> MutSet<T, S>
 where
     T: Item,
     S: BuildHasher,
 {
     #[inline]
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut <T as Item>::ImmutIdItem> {
-        self.inner.iter_mut().map(|(_, v)| v)
+    pub fn iter_mut(&mut self) -> ValuesMut<'_, T> {
+        self.inner.values_mut().map(MutSetDeref::mut_set_deref)
     }
-}
-
-impl<T, S> MutSet<T, S>
-where
-    T: Item,
-    S: BuildHasher,
-{
     /// Returns the number of elements the set can hold without reallocating.
     ///
     /// # Examples
@@ -743,10 +659,8 @@ where
     /// In the current implementation, iterating over set takes O(capacity) time
     /// instead of O(len) because it internally visits empty buckets too.
     #[inline]
-    pub fn iter(&self) -> impl Clone + Iterator<Item = &T> {
-        self.inner
-            .values()
-            .map(<<T as Item>::ImmutIdItem as core::ops::Deref>::deref)
+    pub fn iter(&self) -> Values<'_, u64, T> {
+        self.inner.values()
     }
 
     /// Returns the number of elements in the set.
@@ -881,8 +795,7 @@ where
         F: FnMut(&T) -> bool,
     {
         let mut f_mut = f;
-        self.inner
-            .retain(|_: &u64, v: &mut T::ImmutIdItem| f_mut(Deref::deref(&*v)))
+        self.inner.retain(|_, v| f_mut(&*v))
     }
 
     /// Clears the set, removing all values.

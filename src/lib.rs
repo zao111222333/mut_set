@@ -59,19 +59,14 @@ mod impl_eq;
 mod impl_serdes;
 mod impl_set;
 mod impl_sort;
+pub mod derive {
+    pub use mut_set_derive::item;
+}
 use core::{
     hash::{BuildHasher, Hash},
     ops::Deref,
 };
 use std::{collections::HashMap, hash::RandomState};
-
-pub trait Item
-where
-    Self: Hash + Sized,
-{
-    type ImmutIdItem: From<Self> + Into<Self> + Deref<Target = Self>;
-    type Id: Hash + ?Sized;
-}
 
 /// See more at [![github](https://img.shields.io/badge/github-main-blue?logo=github)](https://github.com/zao111222333/mut_set)
 /// ```
@@ -129,9 +124,18 @@ where
 ///}
 /// ```
 pub struct MutSet<T: Item, S: BuildHasher = RandomState> {
-    inner: HashMap<u64, T::ImmutIdItem, S>,
+    inner: HashMap<u64, T, S>,
 }
 
-pub mod derive {
-    pub use mut_set_derive::item;
+pub trait Item
+where
+    Self: Hash + Sized + MutSetDeref<Target = Self::ImmutIdItem>,
+{
+    type ImmutIdItem: Deref<Target = Self>;
+    type Id: Hash + ?Sized;
+}
+
+pub trait MutSetDeref {
+    type Target;
+    fn mut_set_deref(&mut self) -> &mut Self::Target;
 }

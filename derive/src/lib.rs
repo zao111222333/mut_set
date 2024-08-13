@@ -14,7 +14,6 @@
 //!    #[id]
 //!    pub id2: String,
 //!}
-//!#[test]
 //!fn test() {
 //!    let mut set = mut_set::MutSet::new();
 //!    println!("{:?}", set);

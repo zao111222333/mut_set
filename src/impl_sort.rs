@@ -9,44 +9,28 @@ where
     /// into_iter_sort
     #[inline]
     pub fn into_iter_sort(self) -> impl Iterator<Item = T> {
-        let mut vec = Vec::from_iter(
-            self.inner
-                .into_values()
-                .map(<<T as Item>::ImmutIdItem as Into<T>>::into),
-        );
+        let mut vec: Vec<T> = self.inner.into_values().collect();
         vec.sort();
         vec.into_iter()
     }
     /// iter_sort
     #[inline]
     pub fn iter_sort(&self) -> impl Clone + Iterator<Item = &T> {
-        let mut vec = Vec::from_iter(
-            self.inner
-                .values()
-                .map(<<T as Item>::ImmutIdItem as core::ops::Deref>::deref),
-        );
+        let mut vec: Vec<&T> = self.inner.values().collect();
         vec.sort();
         vec.into_iter()
     }
-
-    /// into_iter_sort
+    /// into_iter_sort_reverse
     #[inline]
     pub fn into_iter_sort_reverse(self) -> impl Iterator<Item = T> {
-        let mut vec = Vec::from_iter(
-            self.inner
-                .into_values()
-                .map(|v| Reverse(<<T as Item>::ImmutIdItem as Into<T>>::into(v))),
-        );
+        let mut vec: Vec<Reverse<T>> = self.inner.into_values().map(Reverse).collect();
         vec.sort();
         vec.into_iter().map(|v| v.0)
     }
-    /// iter_sort
+    /// iter_sort_reverse
     #[inline]
     pub fn iter_sort_reverse(&self) -> impl Clone + Iterator<Item = &T> {
-        let mut vec =
-            Vec::from_iter(self.inner.values().map(|v| {
-                Reverse(<<T as Item>::ImmutIdItem as core::ops::Deref>::deref(v))
-            }));
+        let mut vec: Vec<Reverse<&T>> = self.inner.values().map(Reverse).collect();
         vec.sort();
         vec.into_iter().map(|v| v.0)
     }

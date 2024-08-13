@@ -1,6 +1,4 @@
-// cargo expand --manifest-path ./tests/Cargo.toml derive
-
-use std::hash::RandomState;
+// cargo expand --manifest-path ./tests/Cargo.toml serde
 
 #[derive(serde::Serialize, serde::Deserialize)]
 #[derive(Debug, derivative::Derivative, Eq, PartialEq)]

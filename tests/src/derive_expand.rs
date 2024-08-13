@@ -1,3 +1,5 @@
+#![allow(clippy::all, unused)]
+
 #[cfg(not(doc))]
 #[derive(Debug, derivative::Derivative)]
 #[derivative(Default)]
@@ -23,7 +25,7 @@ mod __my_item {
     };
     #[doc(hidden)]
     #[derive(Debug, derivative::Derivative)]
-    #[derive(Clone)]
+    #[derivative(Default)]
     #[derivative(Default)]
     #[repr(C)]
     pub(in super::super) struct MyItemId<T1, T2>
@@ -49,7 +51,6 @@ mod __my_item {
     }
     #[doc(hidden)]
     #[derive(Debug, derivative::Derivative)]
-    #[derive(Clone)]
     #[derivative(Default)]
     #[repr(C)]
     pub(in super::super) struct ImmutIdMyItem<T1, T2>
@@ -82,7 +83,7 @@ mod __my_item {
         }
         #[inline]
         pub(in super::super) fn id(&self) -> &MyItemId<T1, T2> {
-            self.borrow()
+            <MyItem<T1, T2> as Borrow<MyItemId<T1, T2>>>::borrow(self)
         }
     }
     #[doc(hidden)]
@@ -92,7 +93,7 @@ mod __my_item {
     {
         #[inline]
         fn eq(&self, other: &Self) -> bool {
-            self.id3.eq(&other.id3) && self.id2.eq(&other.id2) && self.id1.eq(&other.id1)
+            self.id3 == other.id3 && self.id2 == other.id2 && self.id1 == other.id1
         }
     }
     #[doc(hidden)]
@@ -121,15 +122,7 @@ mod __my_item {
         T1: Sized,
     {
         fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-            match self.id1.cmp(&other.id1) {
-                core::cmp::Ordering::Equal => {}
-                ord => return ord,
-            }
-            match self.id2.cmp(&other.id2) {
-                core::cmp::Ordering::Equal => {}
-                ord => return ord,
-            }
-            self.id3.cmp(&other.id3)
+            self.partial_cmp(other).unwrap_or(std::cmp::Ordering::Equal)
         }
     }
     #[doc(hidden)]
@@ -168,76 +161,14 @@ mod __my_item {
             unsafe { &*(self as *const Self as *const Self::Target) }
         }
     }
-    impl<T1, T2> From<MyItem<T1, T2>> for ImmutIdMyItem<T1, T2>
+    impl<T1, T2> mut_set::MutSetDeref for MyItem<T1, T2>
     where
         T1: Sized,
     {
+        type Target = ImmutIdMyItem<T1, T2>;
         #[inline]
-        fn from(value: MyItem<T1, T2>) -> Self {
-            Self {
-                ctx1: value.ctx1,
-                ctx2: value.ctx2,
-                id1: value.id1,
-                id2: value.id2,
-                id3: value.id3,
-            }
+        fn mut_set_deref(&mut self) -> &mut Self::Target {
+            unsafe { &mut *(self as *mut Self as *mut Self::Target) }
         }
-    }
-    impl<T1, T2> From<ImmutIdMyItem<T1, T2>> for MyItem<T1, T2>
-    where
-        T1: Sized,
-    {
-        #[inline]
-        fn from(value: ImmutIdMyItem<T1, T2>) -> Self {
-            Self {
-                ctx1: value.ctx1,
-                ctx2: value.ctx2,
-                id1: value.id1,
-                id2: value.id2,
-                id3: value.id3,
-            }
-        }
-    }
-}
-#[test]
-fn test() {
-    let mut set = mut_set::MutSet::new();
-    println!("{:?}", set);
-    set.insert(MyItem {
-        id1: 2,
-        id2: "www".to_string(),
-        ctx1: -1,
-        ctx2: "ccc".to_string(),
-        id3: (),
-    });
-    set.insert(MyItem {
-        id1: 1,
-        id2: "ww".to_string(),
-        ctx1: -2,
-        ctx2: "cc".to_string(),
-        id3: (),
-    });
-    println!("{:?}", set);
-    for v in set.iter() {
-        println!("{:?}", v);
-    }
-    for v in set.iter_mut() {
-        v.ctx1 = 0;
-        println!("{:?}", v.id1);
-        // In `iter_mut` IDs write will be prohibited
-        // v.id1 = 0;
-    }
-    println!("{:?}", set);
-    println!("{:?}", set.get(&MyItem::new_id(2, "www".to_string(), ())));
-    set.replace(MyItem {
-        id1: 1,
-        id2: "ww".to_string(),
-        ctx1: -2,
-        ctx2: "cc".to_string(),
-        id3: (),
-    });
-    println!("{:?}", set);
-    for v in set.into_iter_sort() {
-        println!("{:?}", v);
     }
 }
