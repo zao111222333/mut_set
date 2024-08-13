@@ -3,7 +3,7 @@
 use std::hash::RandomState;
 
 #[derive(serde::Serialize, serde::Deserialize)]
-#[derive(Debug, derivative::Derivative)]
+#[derive(Debug, derivative::Derivative, Eq, PartialEq)]
 #[derivative(Default)]
 #[mut_set::derive::item]
 pub(super) struct MyItem<T1, T2>
@@ -21,7 +21,7 @@ where
 
 #[test]
 fn test() {
-    let set = mut_set::MutSet::<MyItem<i32, String>, RandomState>::from(vec![
+    let set = mut_set::MutSet::<MyItem<i32, String>>::from(vec![
         MyItem {
             id1: 1,
             id2: "ww".to_string(),
@@ -41,4 +41,6 @@ fn test() {
     let deserialized: mut_set::MutSet<MyItem<i32, String>> =
         serde_json::from_str(&serialized).unwrap();
     println!("deserialized = {:?}", deserialized);
+    assert_eq!(set, deserialized);
+    assert_ne!(set, mut_set::MutSet::<MyItem<i32, String>>::new());
 }

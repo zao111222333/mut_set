@@ -1,14 +1,12 @@
-use serde::{
-    de::{self, value::SeqDeserializer, IntoDeserializer},
-    Deserialize, Deserializer, Serialize, Serializer,
-};
-
 use super::{Item, MutSet};
-use std::{
+use core::{
     borrow::Borrow,
-    collections::{HashMap, HashSet, TryReserveError},
-    hash::{BuildHasher, Hash, RandomState},
+    hash::{BuildHasher, Hash},
     ops::Deref,
+};
+use std::{
+    collections::{HashMap, HashSet, TryReserveError},
+    hash::RandomState,
 };
 impl<T, Q> Clone for MutSet<T>
 where
@@ -27,7 +25,7 @@ impl<T: Item + std::fmt::Debug> std::fmt::Debug for MutSet<T> {
     }
 }
 
-impl<T: Item, S: Default> Default for MutSet<T, S> {
+impl<T: Item, S: Default + BuildHasher> Default for MutSet<T, S> {
     fn default() -> Self {
         Self { inner: Default::default() }
     }
@@ -107,100 +105,9 @@ where
 {
     #[inline]
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
-        let vec: Vec<(u64, T::ImmutIdItem)> = iter
-            .into_iter()
-            .map(|v| (self.hash_one(&v.borrow()), v.into()))
-            .collect();
-        self.inner.extend(vec);
+        iter.into_iter().for_each(|v| _ = self.insert(v));
     }
 }
-
-// /// A lazy iterator producing elements in the difference of `HashSet`s.
-// ///
-// /// This `struct` is created by the [`difference`] method on [`HashSet`].
-// /// See its documentation for more.
-// ///
-// /// [`difference`]: HashSet::difference
-// ///
-// /// # Examples
-// ///
-// /// ```
-// /// use std::collections::HashSet;
-// ///
-// /// let a = HashSet::from([1, 2, 3]);
-// /// let b = HashSet::from([4, 2, 3, 4]);
-// ///
-// /// let mut difference = a.difference(&b);
-// /// ```
-// // #[must_use = "this returns the difference as an iterator, \
-// //               without modifying either input set"]
-// // #[stable(feature = "rust1", since = "1.0.0")]
-// pub struct Difference<'a, T, S>
-// where
-//     T: 'a + Item,
-//     S: 'a,
-// {
-//     // iterator of the first set
-//     // iter: Box<dyn CloneIterator<&'a T>>,
-//     // iter: Box<dyn Clone>,
-//     // iter: &'adyn Iterator<Item = &'a T>,
-//     iter: Box<dyn Iterator<Item = &'a T>>,
-//     // iter: std::collections::hash_set::Iter<'a, T>,
-//     // the second set
-//     other: &'a MutSet<T, S>,
-// }
-
-// trait CloneIterator<T>: Iterator<Item = T> {
-
-// }
-
-// // impl<T: Item, S> Clone for Difference<'_, T, S> {
-// //     #[inline]
-// //     fn clone(&self) -> Self {
-// //         Difference { iter: self.iter.clone(), ..*self }
-// //     }
-// // }
-
-// impl<'a, T, S> Iterator for Difference<'a, T, S>
-// where
-//     T: Item,
-//     S: BuildHasher,
-// {
-//     type Item = &'a T;
-
-//     #[inline]
-//     fn next(&mut self) -> Option<&'a T> {
-//         loop {
-//             let elt = self.iter.next()?;
-//             if !self.other.contains(elt) {
-//                 return Some(elt);
-//             }
-//         }
-//     }
-
-//     #[inline]
-//     fn size_hint(&self) -> (usize, Option<usize>) {
-//         let (_, upper) = self.iter.size_hint();
-//         (0, upper)
-//     }
-// }
-
-// impl<T, S> FusedIterator for Difference<'_, T, S>
-// where
-//     T: Item,
-//     S: BuildHasher,
-// {
-// }
-
-// impl<T, S> std::fmt::Debug for Difference<'_, T, S>
-// where
-//     T: std::fmt::Debug + Item,
-//     S: BuildHasher,
-// {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         f.debug_list().entries(self.clone()).finish()
-//     }
-// }
 
 impl<T, S> MutSet<T, S>
 where
@@ -329,37 +236,6 @@ where
     //     Difference { iter: Box::new(self.iter()), other }
     // }
 
-    // /// Visits the values representing the symmetric difference,
-    // /// i.e., the values that are in `self` or in `other` but not in both.
-    // ///
-    // /// # Examples
-    // ///
-    // /// ```
-    // /// use std::collections::HashSet;
-    // /// let a = HashSet::from([1, 2, 3]);
-    // /// let b = HashSet::from([4, 2, 3, 4]);
-    // ///
-    // /// // Print 1, 4 in arbitrary order.
-    // /// for x in a.symmetric_difference(&b) {
-    // ///     println!("{x}");
-    // /// }
-    // ///
-    // /// let diff1: HashSet<_> = a.symmetric_difference(&b).collect();
-    // /// let diff2: HashSet<_> = b.symmetric_difference(&a).collect();
-    // ///
-    // /// assert_eq!(diff1, diff2);
-    // /// assert_eq!(diff1, [1, 4].iter().collect());
-    // /// ```
-    // #[inline]
-    // pub fn symmetric_difference<'a>(
-    //     &'a self,
-    //     other: &'a MutSet<T, S>,
-    // ) -> SymmetricDifference<'a, T, S> {
-    //     let x = self.iter().collect::<HashSet<T,S>>();
-    //     x.symmetric_difference(other.iter().collect::<HashSet<T,S>>())
-    //     // SymmetricDifference { iter: self.difference(other).chain(other.difference(self)) }
-    // }
-
     // /// Visits the values representing the intersection,
     // /// i.e., the values that are both in `self` and `other`.
     // ///
@@ -440,12 +316,12 @@ where
     /// assert_eq!(set.contains(&4), false);
     /// ```
     #[inline]
-    pub fn contains<Q: ?Sized>(&self, value: &Q) -> bool
+    pub fn contains<Q>(&self, value: &Q) -> bool
     where
         T: Borrow<Q>,
-        Q: Hash,
+        Q: Hash + ?Sized,
     {
-        self.inner.contains_key(&self.hash_one(&value))
+        self.inner.contains_key(&self.hash_one(value))
     }
 
     /// Returns a reference to the value in the set, if any, that is equal to the given value.
@@ -464,13 +340,13 @@ where
     /// assert_eq!(set.get(&4), None);
     /// ```
     #[inline]
-    pub fn get<Q: ?Sized>(&self, value: &Q) -> Option<&T>
+    pub fn get<Q>(&self, value: &Q) -> Option<&T>
     where
         T: Borrow<Q>,
-        Q: Hash,
+        Q: Hash + ?Sized,
     {
         // let hash_value = self.hash_one_key(value);
-        match self.inner.get(&self.hash_one(&value)) {
+        match self.inner.get(&self.hash_one(value)) {
             Some(v) => Some(v),
             None => None,
         }
@@ -495,15 +371,12 @@ where
     /// assert_eq!(map[&1], "b");
     /// ```
     #[inline]
-    pub fn get_mut<Q: ?Sized>(
-        &mut self,
-        value: &Q,
-    ) -> Option<&mut <T as Item>::ImmutIdItem>
+    pub fn get_mut<Q>(&mut self, value: &Q) -> Option<&mut <T as Item>::ImmutIdItem>
     where
         T: Borrow<Q>,
-        Q: Hash,
+        Q: Hash + ?Sized,
     {
-        self.inner.get_mut(&self.hash_one(&value))
+        self.inner.get_mut(&self.hash_one(value))
     }
 
     // /// Inserts the given `value` into the set if it is not present, then
@@ -710,18 +583,18 @@ where
     #[inline]
     pub fn insert(&mut self, v: T) -> bool {
         let key = self.hash_one(&v);
-        if self.inner.contains_key(&key) {
-            false
-        } else {
-            self.inner.insert(key, v.into());
+        if let std::collections::hash_map::Entry::Vacant(e) = self.inner.entry(key) {
+            e.insert(v.into());
             true
+        } else {
+            false
         }
     }
-
-    pub fn hash_one<Q: ?Sized>(&self, v: &Q) -> u64
+    #[inline]
+    pub fn hash_one<Q>(&self, v: &Q) -> u64
     where
         T: Borrow<Q>,
-        Q: Hash,
+        Q: Hash + ?Sized,
     {
         self.inner.hasher().hash_one(v)
     }
@@ -743,10 +616,9 @@ where
     /// ```
     #[inline]
     pub fn replace(&mut self, value: T) -> Option<T> {
-        match self.inner.insert(self.hash_one(&value), value.into()) {
-            Some(t) => Some(t.into()),
-            None => None,
-        }
+        self.inner
+            .insert(self.hash_one(&value), value.into())
+            .map(Into::<T>::into)
     }
 
     /// Removes a value from the set. Returns whether the value was
@@ -768,12 +640,12 @@ where
     /// assert_eq!(set.remove(&2), false);
     /// ```
     #[inline]
-    pub fn remove<Q: ?Sized>(&mut self, value: &Q) -> bool
+    pub fn remove<Q>(&mut self, value: &Q) -> bool
     where
         T: Borrow<Q>,
-        Q: Hash,
+        Q: Hash + ?Sized,
     {
-        self.inner.remove(&self.hash_one(&value)).is_some()
+        self.inner.remove(&self.hash_one(value)).is_some()
     }
 
     /// Removes and returns the value in the set, if any, that is equal to the given one.
@@ -792,46 +664,48 @@ where
     /// assert_eq!(set.take(&2), None);
     /// ```
     #[inline]
-    pub fn take<Q: ?Sized>(&mut self, value: &Q) -> Option<T>
+    pub fn take<Q>(&mut self, value: &Q) -> Option<T>
     where
         T: Borrow<Q>,
-        Q: Hash,
+        Q: Hash + ?Sized,
     {
-        match self.inner.remove(&self.hash_one(&value)) {
-            Some(t) => Some(t.into()),
-            None => None,
-        }
+        self.inner.remove(&self.hash_one(value)).map(Into::<T>::into)
+    }
+}
+
+impl<T, S> Iterator for MutSet<T, S>
+where
+    T: Item,
+    S: BuildHasher,
+{
+    type Item = T;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner
+            .keys()
+            .next()
+            .copied()
+            .and_then(|k| self.inner.remove(&k))
+            .map(<<T as Item>::ImmutIdItem as Into<T>>::into)
     }
 }
 
 impl<T, S> MutSet<T, S>
 where
     T: Item,
+    S: BuildHasher,
 {
     #[inline]
-    pub fn into_iter(self) -> std::vec::IntoIter<T> {
-        self.inner
-            .into_iter()
-            .map(|(_, v)| <<T as Item>::ImmutIdItem as Into<T>>::into(v))
-            .collect::<Vec<_>>()
-            .into_iter()
-    }
-    // #[inline]
-    // pub fn into_iter(self) -> impl Iterator<Item = T> {
-    //     self.inner
-    //         .into_iter()
-    //         .map(|(_, v)| <<T as Item>::ImmutIdItem as Into<T>>::into(v))
-    //         .into_iter()
-    // }
-    #[inline]
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut <T as Item>::ImmutIdItem> {
-        self.inner.iter_mut().map(|(_, v)| v).into_iter()
+        self.inner.iter_mut().map(|(_, v)| v)
     }
 }
 
 impl<T, S> MutSet<T, S>
 where
     T: Item,
+    S: BuildHasher,
 {
     /// Returns the number of elements the set can hold without reallocating.
     ///
@@ -869,12 +743,10 @@ where
     /// In the current implementation, iterating over set takes O(capacity) time
     /// instead of O(len) because it internally visits empty buckets too.
     #[inline]
-    // pub fn iter(&self) -> std::collections::hash_set::Iter<'_,T>{
     pub fn iter(&self) -> impl Clone + Iterator<Item = &T> {
         self.inner
-            .iter()
-            .map(|(_, v)| <<T as Item>::ImmutIdItem as core::ops::Deref>::deref(&v))
-            .into_iter()
+            .values()
+            .map(<<T as Item>::ImmutIdItem as core::ops::Deref>::deref)
     }
 
     /// Returns the number of elements in the set.
@@ -1107,99 +979,5 @@ where
     #[inline]
     pub fn hasher(&self) -> &S {
         self.inner.hasher()
-    }
-}
-
-use std::{cmp::Reverse, collections::BinaryHeap};
-
-impl<T, S> MutSet<T, S>
-where
-    T: Item + Ord,
-{
-    /// into_iter_sort
-    #[inline]
-    pub fn into_iter_sort(self) -> impl Iterator<Item = T> {
-        let mut vec = Vec::from_iter(
-            self.inner
-                .into_iter()
-                .map(|(_, v)| <<T as Item>::ImmutIdItem as Into<T>>::into(v)),
-        );
-        vec.sort();
-        vec.into_iter()
-    }
-    /// iter_sort
-    #[inline]
-    pub fn iter_sort(&self) -> impl Clone + Iterator<Item = &T> {
-        let mut vec = Vec::from_iter(
-            self.inner
-                .iter()
-                .map(|(_, v)| <<T as Item>::ImmutIdItem as core::ops::Deref>::deref(v)),
-        );
-        vec.sort();
-        vec.into_iter()
-    }
-
-    /// into_iter_sort
-    #[inline]
-    pub fn into_iter_sort_reverse(self) -> impl Iterator<Item = T> {
-        let mut vec = Vec::from_iter(
-            self.inner
-                .into_iter()
-                .map(|(_, v)| Reverse(<<T as Item>::ImmutIdItem as Into<T>>::into(v))),
-        );
-        vec.sort();
-        vec.into_iter().map(|v| v.0)
-    }
-    /// iter_sort
-    #[inline]
-    pub fn iter_sort_reverse(&self) -> impl Clone + Iterator<Item = &T> {
-        let mut vec = Vec::from_iter(self.inner.iter().map(|(_, v)| {
-            Reverse(<<T as Item>::ImmutIdItem as core::ops::Deref>::deref(v))
-        }));
-        vec.sort();
-        vec.into_iter().map(|v| v.0)
-    }
-}
-
-impl<'de, T, S, E> IntoDeserializer<'de, E> for MutSet<T, S>
-where
-    T: IntoDeserializer<'de, E> + Item,
-    S: BuildHasher,
-    E: de::Error,
-{
-    type Deserializer = SeqDeserializer<<Vec<T> as IntoIterator>::IntoIter, E>;
-    #[inline]
-    fn into_deserializer(self) -> Self::Deserializer {
-        SeqDeserializer::new(self.into_iter())
-    }
-}
-// use serde::ser::SerializeSeq;
-impl<T, S> Serialize for MutSet<T, S>
-where
-    T: Serialize + Item,
-    S: BuildHasher,
-{
-    #[inline]
-    fn serialize<SS: Serializer>(&self, serializer: SS) -> Result<SS::Ok, SS::Error> {
-        // let mut seq = serializer.serialize_seq(Some(self.len()))?;
-        // for (_, v) in self.inner.iter() {
-        //     seq.serialize_element(
-        //         <<T as Item>::ImmutIdItem as core::ops::Deref>::deref(&v),
-        //     )?;
-        // }
-        // seq.end()
-        let v: Vec<&T> = self.iter().collect();
-        v.serialize(serializer)
-    }
-}
-
-impl<'de, T, S> Deserialize<'de> for MutSet<T, S>
-where
-    T: Deserialize<'de> + Item,
-    S: BuildHasher + Default,
-{
-    #[inline]
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        Ok(Vec::<T>::deserialize(deserializer)?.into())
     }
 }

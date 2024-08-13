@@ -59,7 +59,7 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
         id.attrs.push(parse_quote!(#[#m]));
     }
     let repr_vec = has_defined_repr(&input);
-    if repr_vec.len() == 0 {
+    if repr_vec.is_empty() {
         input.attrs.push(parse_quote!(#[repr(C)]));
         readonly.attrs.push(parse_quote!(#[repr(C)]));
         id.attrs.push(parse_quote!(#[repr(C)]));
@@ -200,6 +200,7 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
             #[doc(hidden)]
             impl #impl_generics Eq for #ident #ty_generics #where_clause {}
             #[doc(hidden)]
+            #[allow(clippy::non_canonical_partial_ord_impl)]
             impl #impl_generics PartialOrd for #ident #ty_generics #where_clause {
                 fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
                     #partial_cmp
@@ -239,7 +240,6 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
                 #[inline]
                 #readonly_vis fn id(&self)-> &#id_ident #ty_generics { self.borrow() }
             }
-
             #sort_quote
 
             #[doc(hidden)]
@@ -388,7 +388,13 @@ fn rearrange_fields(
                     notin_indices.push(f)
                 }
             }
-            syn::punctuated::Pair::End(_) => todo!(),
+            syn::punctuated::Pair::End(f) => {
+                if indices.contains(&i) {
+                    in_indices.push(f)
+                } else {
+                    notin_indices.push(f)
+                }
+            }
         }
     }
     for f in in_indices.iter().rev() {
@@ -495,7 +501,7 @@ fn parser_args(args: TokenStream) -> Result<(bool, HashSet<String>, HashSet<Stri
             }
             Ok(())
         } else {
-            return Err(Error::new(call_site, format!("Need terms after `{t}`")));
+            Err(Error::new(call_site, format!("Need terms after `{t}`")))
         }
     }
     let mut i = args.into_iter();

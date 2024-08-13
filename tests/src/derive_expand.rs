@@ -92,12 +92,13 @@ mod __my_item {
     {
         #[inline]
         fn eq(&self, other: &Self) -> bool {
-            self.id3 == other.id3 && self.id2 == other.id2 && self.id1 == other.id1
+            self.id3.eq(&other.id3) && self.id2.eq(&other.id2) && self.id1.eq(&other.id1)
         }
     }
     #[doc(hidden)]
     impl<T1, T2> Eq for MyItem<T1, T2> where T1: Sized {}
     #[doc(hidden)]
+    #[allow(clippy::non_canonical_partial_ord_impl)]
     impl<T1, T2> PartialOrd for MyItem<T1, T2>
     where
         T1: Sized,
