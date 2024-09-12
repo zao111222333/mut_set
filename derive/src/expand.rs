@@ -2,10 +2,11 @@ use std::collections::HashSet;
 
 use proc_macro2::{Span, TokenStream, TokenTree};
 use quote::{quote, ToTokens};
+use syn::parse::Parse;
 use syn::visit_mut::{self, VisitMut};
 use syn::{
-    parse_quote, token, Attribute, Data, DeriveInput, Error, Expr, Field, Fields, Ident,
-    Path, Result, Token, Visibility,
+    parse_quote, parse_str, token, Attribute, Data, DeriveInput, Error, Expr, Field,
+    Fields, Ident, Lit, Path, Result, Token, Visibility,
 };
 
 type Punctuated = syn::punctuated::Punctuated<Field, Token![,]>;
@@ -77,8 +78,11 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
     let readonly_fields = fields_of_input(&mut readonly);
     let id_fields = fields_of_input(&mut id);
     let mut id_func_input = quote!();
+    let mut id_hash_func_input = quote!();
+    let mut borrow_check = quote!();
     let mut id_func_fields = quote!();
-    let mut id_hash = quote!();
+    let mut hash_impl = quote!();
+    let mut id_hash_impl = quote!();
     let mut into_fields = quote!();
     let mut partial_cmp = quote!();
     let mut partial_eq = quote!();
@@ -87,7 +91,8 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
     }
     for (i, f) in readonly_fields.iter_mut().enumerate() {
         f.attrs = attr_filter_fn(&f.attrs);
-        if indices.contains(&i) {
+        if indices.iter().any(|(idx, _)| idx == &i) {
+            // if indices.contains(&i) {
             f.vis = Visibility::Inherited;
         } else {
             f.vis = to_super(&f.vis);
@@ -96,29 +101,59 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
 
     let (_id_fields, _other_fields) = rearrange_fields(input_fields, &indices);
     id_fields.clear();
-    for f in _id_fields.iter() {
+    for (f, borrow_type) in _id_fields.iter() {
         let t = f.ty.clone();
         let i = f.ident.clone();
-        id_hash = quote! {
-            #id_hash
+        hash_impl = quote! {
             Hash::hash(&self.#i, state);
+            #hash_impl
+        };
+        id_hash_impl = quote! {
+            Hash::hash(#i, &mut state);
+            #id_hash_impl
         };
         id_func_input = quote! {#i: #t, #id_func_input};
+        if let Some(borrow_t) = &borrow_type.borrow_type {
+            borrow_check = if let Some(check_fn) = &borrow_type.check_fn {
+                quote! {
+                    fn #i(id: &#t) -> #borrow_t { #check_fn(id) }
+                    #borrow_check
+                }
+            } else {
+                quote! {
+                    fn #i(id: &#t) -> #borrow_t { id.borrow() }
+                    #borrow_check
+                }
+            };
+            let mut leading_ref = false;
+            if let Some(TokenTree::Punct(p)) = borrow_t.clone().into_iter().next() {
+                if p.as_char() == '&' {
+                    leading_ref = true;
+                }
+            }
+            id_hash_func_input = if leading_ref {
+                quote! {#i: #borrow_t, #id_hash_func_input}
+            } else {
+                quote! {#i: &#borrow_t, #id_hash_func_input}
+            };
+        } else {
+            id_hash_func_input = quote! {#i: &#t, #id_hash_func_input};
+        }
         id_func_fields = quote! {#i, #id_func_fields};
         into_fields = quote! {#i:value.#i, #into_fields};
     }
     if sort {
-        let i = _id_fields[0].ident.clone();
+        let i = _id_fields[0].0.ident.clone();
         partial_eq = quote! {#partial_eq
             self.#i == other.#i
         };
-        for f in _id_fields.iter().skip(1) {
+        for (f, _) in _id_fields.iter().skip(1) {
             let i = f.ident.clone();
             partial_eq = quote! {#partial_eq
                 && self.#i == other.#i
             };
         }
-        for f in _id_fields.iter().skip(1) {
+        for (f, _) in _id_fields.iter().skip(1) {
             let i = f.ident.clone();
             partial_cmp = quote! {
                 match self.#i.partial_cmp(&other.#i) {
@@ -128,13 +163,13 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
                 #partial_cmp
             };
         }
-        let i = _id_fields[0].ident.clone();
+        let i = _id_fields[0].0.ident.clone();
         partial_cmp = quote! {#partial_cmp
             self.#i.partial_cmp(&other.#i)
         };
     }
 
-    for mut f in _id_fields.clone().into_iter().rev() {
+    for (mut f, _) in _id_fields.clone().into_iter().rev() {
         f.attrs = attr_filter_fn(&f.attrs);
         f.vis = to_super(&f.vis);
         id_fields.push(f);
@@ -161,7 +196,7 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
         quote! {:: #ty_generics {#id_func_fields} }
     };
     let borrow_when_single_id = if _id_fields.len() == 1 {
-        let f = _id_fields.first().unwrap();
+        let (f, _) = _id_fields.first().unwrap();
         let t = f.ty.clone();
         let i = f.ident.clone();
         quote! {
@@ -182,6 +217,7 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
 
     readonly.ident = Ident::new(&format!("ImmutId{}", input.ident), call_site);
     id.ident = Ident::new(&format!("{}Id", input.ident), call_site);
+    let id_hash_ident = Ident::new(&format!("{}BorrowId", input.ident), call_site);
     let readonly_ident = &readonly.ident;
     let id_ident = &id.ident;
     let mod_name =
@@ -229,16 +265,29 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
             impl #impl_generics Hash for #id_ident #ty_generics #where_clause {
                 #[inline]
                 fn hash<H: Hasher>(&self, state: &mut H) {
-                    #id_hash
+                    #hash_impl
                 }
             }
 
             #readonly
+            #[allow(clippy::ref_option_ref)]
             impl #impl_generics #ident #ty_generics #where_clause {
                 #[inline]
                 #readonly_vis fn new_id(#id_func_input)->#id_ident #ty_generics { #id_ident #id_func }
                 #[inline]
                 #readonly_vis fn id(&self)-> &#id_ident #ty_generics { <#ident #ty_generics as Borrow<#id_ident #ty_generics>>::borrow(self) }
+                const CHECK: () = {
+                    #borrow_check
+                };
+                #[inline]
+                #readonly_vis fn borrow_id(
+                    __set: &mut_set::MutSet<#ident #ty_generics>, #id_hash_func_input
+                )-><#ident #ty_generics as mut_set::Item>::BorrowId{
+                    use std::hash::BuildHasher;
+                    let mut state = __set.hasher().build_hasher();
+                    #id_hash_impl
+                    state.finish().into()
+                }
             }
             #sort_quote
 
@@ -256,10 +305,20 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
                     <#ident #ty_generics as Borrow<#id_ident #ty_generics>>::borrow(self).hash(state);
                 }
             }
+            #readonly_vis struct #id_hash_ident(u64);
+            impl From<u64> for #id_hash_ident {
+                #[inline]
+                fn from(value: u64) -> Self { Self(value) }
+            }
+            impl Into<u64> for #id_hash_ident {
+                #[inline]
+                fn into(self) -> u64 { self.0 }
+            }
             impl #impl_generics mut_set::Item for #ident #ty_generics #where_clause {
-                    type ImmutIdItem = #readonly_ident #ty_generics;
-                    type Id = #id_ident #ty_generics;
-                }
+                type Id = #id_ident #ty_generics;
+                type BorrowId = #id_hash_ident;
+                type ImmutIdItem = #readonly_ident #ty_generics;
+            }
             impl #impl_generics Deref for #readonly_ident #ty_generics #where_clause {
                 type Target = #ident #ty_generics;
                 #[inline]
@@ -319,28 +378,29 @@ fn fields_of_input(input: &mut DeriveInput) -> &mut Punctuated {
 fn find_and_strip_readonly_attrs(
     input: &mut DeriveInput,
     errors: &mut Vec<Error>,
-) -> Vec<usize> {
+) -> Vec<(usize, BorrowType)> {
     let mut indices = Vec::new();
 
     for (i, field) in fields_of_input(input).iter_mut().enumerate() {
-        let mut readonly_attr_index = None;
-
         for (j, attr) in field.attrs.iter().enumerate() {
             if attr.path().is_ident("id") {
-                if let Err(err) = attr.meta.require_path_only() {
-                    errors.push(err);
-                }
-                readonly_attr_index = Some(j);
+                let borrow_type = match attr.meta {
+                    syn::Meta::Path(_) => BorrowType::default(),
+                    syn::Meta::List(_) => match attr.parse_args_with(BorrowType::parse) {
+                        Ok(t) => t,
+                        Err(e) => {
+                            errors.push(e);
+                            BorrowType::default()
+                        }
+                    },
+                    syn::Meta::NameValue(_) => todo!(),
+                };
+                field.attrs.remove(j);
+                indices.push((i, borrow_type));
                 break;
             }
         }
-
-        if let Some(readonly_attr_index) = readonly_attr_index {
-            field.attrs.remove(readonly_attr_index);
-            indices.push(i);
-        }
     }
-
     indices
 }
 
@@ -368,37 +428,39 @@ impl<'a> VisitMut for ReplaceSelf<'a> {
 
 fn rearrange_fields(
     input_fields: &mut Punctuated,
-    indices: &[usize],
-) -> (Vec<Field>, Vec<Field>) {
+    indices: &[(usize, BorrowType)],
+) -> (Vec<(Field, BorrowType)>, Vec<Field>) {
     let mut in_indices = Vec::new();
     let mut notin_indices = Vec::new();
     let mut i = input_fields.len();
     while let Some(p) = input_fields.pop() {
         i -= 1;
         match p {
-            syn::punctuated::Pair::Punctuated(f, _) => {
-                if indices.contains(&i) {
-                    in_indices.push(f)
-                } else {
-                    notin_indices.push(f)
+            syn::punctuated::Pair::Punctuated(f, _) | syn::punctuated::Pair::End(f) => {
+                let mut find = false;
+                'L: for (idx, borrow_type) in indices {
+                    if &i == idx {
+                        find = true;
+                        in_indices.push((f.clone(), borrow_type.clone()));
+                        break 'L;
+                    }
                 }
-            }
-            syn::punctuated::Pair::End(f) => {
-                if indices.contains(&i) {
-                    in_indices.push(f)
-                } else {
-                    notin_indices.push(f)
+                if !find {
+                    notin_indices.push(f);
                 }
+                // if indices.contains(&i) {
+                //     in_indices.push(f)
+                // } else {
+                //     notin_indices.push(f)
+                // }
             }
         }
     }
-    for f in in_indices.iter().rev() {
-        let mut _f = f.clone();
-        input_fields.push(_f);
+    for (f, _) in in_indices.iter().rev() {
+        input_fields.push(f.clone());
     }
     for f in notin_indices.iter().rev() {
-        let mut _f = f.clone();
-        input_fields.push(_f);
+        input_fields.push(f.clone());
     }
     (in_indices, notin_indices)
 }
@@ -576,6 +638,70 @@ fn parser_args(args: TokenStream) -> Result<(bool, HashSet<String>, HashSet<Stri
         return Err(Error::new(call_site, format!("want nothing, find `{}`", arg)));
     }
     Ok((sort, macro_set, attri_set))
+}
+#[test]
+fn borrow_type_test() {
+    // let attr: Attribute = parse_quote!(#[id]);
+    // let attr: Attribute = parse_quote!(#[id(borrow="&[ArcStr]")] );
+    let attr: Attribute = parse_quote!(#[id(borrow="&str")]);
+    // let attr: Attribute = parse_quote!(#[id(borrow = "Option<&str>", check_fn = "mut_set::check_fn::borrow_option")]);
+    if attr.path().is_ident("id") {
+        let borrow_type = match attr.meta {
+            syn::Meta::Path(_) => BorrowType::default(),
+            syn::Meta::List(_) => match attr.parse_args_with(BorrowType::parse) {
+                Ok(t) => t,
+                Err(e) => {
+                    println!("{e:?}");
+                    BorrowType::default()
+                }
+            },
+            syn::Meta::NameValue(_) => todo!(),
+        };
+        println!("{:?}", borrow_type.borrow_type);
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+struct BorrowType {
+    borrow_type: Option<TokenStream>,
+    check_fn: Option<TokenStream>,
+}
+
+impl syn::parse::Parse for BorrowType {
+    fn parse(input: syn::parse::ParseStream) -> Result<Self> {
+        // let mut borrow_type = None;
+        // if input.peek(syn::Ident) && input.peek2(Token![=]) {
+        //     let ident: syn::Ident = input.parse()?;
+        //     if ident == "borrow" {
+        //         let _: Token![=] = input.parse()?;
+        //         let lit: Lit = input.parse()?;
+        //         if let Lit::Str(lit_str) = lit {
+        //             borrow_type = Some(parse_str(&lit_str.value())?);
+        //         }
+        //     }
+        // }
+        // Ok(Self(borrow_type))
+        let mut borrow_type = None;
+        let mut check_fn = None;
+        while !input.is_empty() {
+            let ident: syn::Ident = input.parse()?;
+            let _: Token![=] = input.parse()?;
+            let lit: Lit = input.parse()?;
+            if ident == "borrow" {
+                if let Lit::Str(lit_str) = lit {
+                    borrow_type = Some(parse_str(&lit_str.value())?);
+                }
+            } else if ident == "check_fn" {
+                if let Lit::Str(lit_str) = lit {
+                    check_fn = Some(parse_str(&lit_str.value())?);
+                }
+            }
+            if input.peek(Token![,]) {
+                let _: Token![,] = input.parse()?;
+            }
+        }
+        Ok(Self { borrow_type, check_fn })
+    }
 }
 #[test]
 fn parser_args_test() {

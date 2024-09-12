@@ -233,6 +233,10 @@ where
     {
         self.inner.contains_key(&self.hash_one(value))
     }
+    #[inline]
+    pub fn contains_borrow(&self, borrow_id: T::BorrowId) -> bool {
+        self.inner.contains_key(&borrow_id.into())
+    }
 
     /// Returns a reference to the value in the set, if any, that is equal to the given value.
     ///
@@ -255,8 +259,14 @@ where
         T: Borrow<Q>,
         Q: Hash + ?Sized,
     {
-        // let hash_value = self.hash_one_key(value);
         match self.inner.get(&self.hash_one(value)) {
+            Some(v) => Some(v),
+            None => None,
+        }
+    }
+    #[inline]
+    pub fn get_borrow(&self, borrow_id: T::BorrowId) -> Option<&T> {
+        match self.inner.get(&borrow_id.into()) {
             Some(v) => Some(v),
             None => None,
         }
@@ -289,6 +299,13 @@ where
         self.inner
             .get_mut(&self.hash_one(value))
             .map(MutSetDeref::mut_set_deref)
+    }
+    #[inline]
+    pub fn get_mut_borrow(
+        &mut self,
+        borrow_id: T::BorrowId,
+    ) -> Option<&mut <T as Item>::ImmutIdItem> {
+        self.inner.get_mut(&borrow_id.into()).map(MutSetDeref::mut_set_deref)
     }
 
     // /// Inserts the given `value` into the set if it is not present, then
@@ -558,6 +575,10 @@ where
         self.inner.remove(&self.hash_one(value)).is_some()
     }
 
+    #[inline]
+    pub fn remove_borrow(&mut self, borrow_id: T::BorrowId) -> bool {
+        self.inner.remove(&borrow_id.into()).is_some()
+    }
     /// Removes and returns the value in the set, if any, that is equal to the given one.
     ///
     /// The value may be any borrowed form of the set's value type, but
@@ -579,7 +600,11 @@ where
         T: Borrow<Q>,
         Q: Hash + ?Sized,
     {
-        self.inner.remove(&self.hash_one(value)).map(Into::<T>::into)
+        self.inner.remove(&self.hash_one(value))
+    }
+    #[inline]
+    pub fn take_borrow(&mut self, borrow_id: T::BorrowId) -> Option<T> {
+        self.inner.remove(&borrow_id.into())
     }
 }
 

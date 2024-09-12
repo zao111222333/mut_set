@@ -2,6 +2,7 @@
 name = "tests"
 
 [dependencies]
+proc-macro-error = "1.0"
 mut_set = { path = ".."}
 derivative = "2.2.0"
 serde_json = "1.0.117"

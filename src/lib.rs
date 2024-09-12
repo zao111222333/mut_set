@@ -54,6 +54,7 @@
 //!}
 //!
 //! ```
+pub mod check_fn;
 mod impl_difference;
 mod impl_eq;
 mod impl_serdes;
@@ -131,8 +132,9 @@ pub trait Item
 where
     Self: Hash + Sized + MutSetDeref<Target = Self::ImmutIdItem>,
 {
-    type ImmutIdItem: Deref<Target = Self>;
     type Id: Hash + ?Sized;
+    type BorrowId: Into<u64> + From<u64>;
+    type ImmutIdItem: Deref<Target = Self>;
 }
 
 pub trait MutSetDeref {

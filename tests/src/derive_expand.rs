@@ -150,6 +150,7 @@ mod __my_item {
     {
         type ImmutIdItem = ImmutIdMyItem<T1, T2>;
         type Id = MyItemId<T1, T2>;
+        type BorrowId = u64;
     }
     impl<T1, T2> Deref for ImmutIdMyItem<T1, T2>
     where
