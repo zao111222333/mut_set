@@ -1,11 +1,7 @@
 use crate::MutSetDeref;
 
 use super::{Item, MutSet};
-use core::{
-    borrow::Borrow,
-    hash::{BuildHasher, Hash},
-    iter::Map,
-};
+use core::{borrow::Borrow, hash::BuildHasher, iter::Map};
 use std::{
     collections::{
         hash_map::{Entry, IntoValues, Values},

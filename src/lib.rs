@@ -63,11 +63,7 @@ mod impl_sort;
 pub mod derive {
     pub use mut_set_derive::item;
 }
-use core::{
-    borrow::Borrow,
-    hash::{BuildHasher, Hash},
-    ops::Deref,
-};
+use core::{borrow::Borrow, hash::BuildHasher, ops::Deref};
 use std::{collections::HashMap, hash::RandomState};
 
 /// See more at [![github](https://img.shields.io/badge/github-main-blue?logo=github)](https://github.com/zao111222333/mut_set)
