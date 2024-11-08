@@ -35,11 +35,11 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
         #input
     };
     let mut readonly = input.clone();
-    let mut id = input.clone();
+    // let mut id = input.clone();
     readonly.attrs.clear();
-    id.attrs.clear();
+    // id.attrs.clear();
     readonly.attrs.push(parse_quote!(#[doc(hidden)]));
-    id.attrs.push(parse_quote!(#[doc(hidden)]));
+    // id.attrs.push(parse_quote!(#[doc(hidden)]));
     let (sort, macro_set, attri_set) = parser_args(args)?;
     let attr_filter_fn = |v: &Vec<Attribute>| -> Vec<Attribute> {
         let mut _v = vec![];
@@ -57,30 +57,26 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
     for macro_s in macro_set {
         let m: syn::Meta = syn::parse_str(&macro_s)?;
         readonly.attrs.push(parse_quote!(#[#m]));
-        id.attrs.push(parse_quote!(#[#m]));
+        // id.attrs.push(parse_quote!(#[#m]));
     }
     let repr_vec = has_defined_repr(&input);
     if repr_vec.is_empty() {
         input.attrs.push(parse_quote!(#[repr(C)]));
         readonly.attrs.push(parse_quote!(#[repr(C)]));
-        id.attrs.push(parse_quote!(#[repr(C)]));
+        // id.attrs.push(parse_quote!(#[repr(C)]));
     } else {
         for attr in repr_vec {
             readonly.attrs.push(attr.clone());
-            id.attrs.push(attr);
+            // id.attrs.push(attr);
         }
     }
     readonly.vis = to_super(&input.vis);
     let readonly_vis = readonly.vis.clone();
-    id.vis = readonly.vis.clone();
-
     let input_fields = fields_of_input(&mut input);
     let readonly_fields = fields_of_input(&mut readonly);
-    let id_fields = fields_of_input(&mut id);
     let mut id_func_input = quote!();
     let mut id_hash_func_input = quote!();
     let mut borrow_check = quote!();
-    let mut id_func_fields = quote!();
     let mut hash_impl = quote!();
     let mut id_hash_impl = quote!();
     let mut into_fields = quote!();
@@ -92,7 +88,6 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
     for (i, f) in readonly_fields.iter_mut().enumerate() {
         f.attrs = attr_filter_fn(&f.attrs);
         if indices.iter().any(|(idx, _)| idx == &i) {
-            // if indices.contains(&i) {
             f.vis = Visibility::Inherited;
         } else {
             f.vis = to_super(&f.vis);
@@ -100,16 +95,16 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
     }
 
     let (_id_fields, _other_fields) = rearrange_fields(input_fields, &indices);
-    id_fields.clear();
+    // id_fields.clear();
     for (f, borrow_type) in _id_fields.iter() {
         let t = f.ty.clone();
         let i = f.ident.clone();
         hash_impl = quote! {
-            Hash::hash(&self.#i, state);
+            Hash::hash(&self.#i, &mut state);
             #hash_impl
         };
         id_hash_impl = quote! {
-            Hash::hash(#i, &mut state);
+            Hash::hash(&#i, &mut state);
             #id_hash_impl
         };
         id_func_input = quote! {#i: #t, #id_func_input};
@@ -139,7 +134,7 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
         } else {
             id_hash_func_input = quote! {#i: &#t, #id_hash_func_input};
         }
-        id_func_fields = quote! {#i, #id_func_fields};
+        // id_func_fields = quote! {&self.#i, #id_func_fields};
         into_fields = quote! {#i:value.#i, #into_fields};
     }
     if sort {
@@ -172,7 +167,7 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
     for (mut f, _) in _id_fields.clone().into_iter().rev() {
         f.attrs = attr_filter_fn(&f.attrs);
         f.vis = to_super(&f.vis);
-        id_fields.push(f);
+        // id_fields.push(f);
     }
     for f in _other_fields.into_iter() {
         let i = f.ident;
@@ -182,44 +177,14 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
     rearrange_fields(readonly_fields, &indices);
     let ident = &input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
-    let _ty_generics: syn::Generics = parse_quote!(#ty_generics);
-    let lt_token = &_ty_generics.lt_token;
-    let gt_token = &_ty_generics.gt_token;
-    let params = &_ty_generics.params;
-    let phantom_type = quote! {#lt_token (#params)#gt_token};
-    let id_func = if ty_generics.to_token_stream().is_empty() {
-        quote! {{#id_func_fields} }
-    } else {
-        id_fields.push(parse_quote!(_p: std::marker::PhantomData #phantom_type ));
-        id_func_fields =
-            quote! {_p: std::marker::PhantomData :: #phantom_type , #id_func_fields};
-        quote! {:: #ty_generics {#id_func_fields} }
-    };
-    let borrow_when_single_id = if _id_fields.len() == 1 {
-        let (f, _) = _id_fields.first().unwrap();
-        let t = f.ty.clone();
-        let i = f.ident.clone();
-        quote! {
-            impl #impl_generics Borrow<#t> for #ident #ty_generics #where_clause {
-                #[inline]
-                fn borrow(&self) -> &#t {
-                    &self.#i
-                }
-            }
-        }
-    } else {
-        quote!()
-    };
     let self_path: Path = parse_quote!(#ident #ty_generics);
     for field in readonly_fields {
         ReplaceSelf::new(&self_path).visit_type_mut(&mut field.ty);
     }
 
     readonly.ident = Ident::new(&format!("ImmutId{}", input.ident), call_site);
-    id.ident = Ident::new(&format!("{}Id", input.ident), call_site);
-    let id_hash_ident = Ident::new(&format!("{}BorrowId", input.ident), call_site);
+    let id_hash_ident = Ident::new(&format!("{}Id", input.ident), call_site);
     let readonly_ident = &readonly.ident;
-    let id_ident = &id.ident;
     let mod_name =
         Ident::new(&format!("__{}", to_snake_case(&ident.to_string())), call_site);
 
@@ -260,64 +225,41 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
         #[doc(hidden)]
         mod #mod_name{
             use super::*;
-            use std::{borrow::Borrow, hash::{Hash,Hasher}, ops::{Deref}};
-            #id
-            impl #impl_generics Hash for #id_ident #ty_generics #where_clause {
-                #[inline]
-                fn hash<H: Hasher>(&self, state: &mut H) {
-                    #hash_impl
-                }
-            }
+            use std::{borrow::Borrow, hash::{Hash,Hasher,BuildHasher}, ops::{Deref}};
 
             #readonly
             #[allow(clippy::ref_option_ref)]
             impl #impl_generics #ident #ty_generics #where_clause {
-                #[inline]
-                #readonly_vis fn new_id(#id_func_input)->#id_ident #ty_generics { #id_ident #id_func }
-                #[inline]
-                #readonly_vis fn id(&self)-> &#id_ident #ty_generics { <#ident #ty_generics as Borrow<#id_ident #ty_generics>>::borrow(self) }
                 const CHECK: () = {
                     #borrow_check
                 };
                 #[inline]
-                #readonly_vis fn borrow_id(
-                    __set: &mut_set::MutSet<#ident #ty_generics>, #id_hash_func_input
-                )-><#ident #ty_generics as mut_set::Item>::BorrowId{
-                    use std::hash::BuildHasher;
+                #readonly_vis fn new_id<S: BuildHasher>(
+                    __set: &mut_set::MutSet<#ident #ty_generics, S>,
+                    #id_hash_func_input
+                )-><#ident #ty_generics as mut_set::Item>::Id{
                     let mut state = __set.hasher().build_hasher();
                     #id_hash_impl
-                    state.finish().into()
+                    #id_hash_ident(state.finish())
                 }
             }
             #sort_quote
-
-            #[doc(hidden)]
-            impl #impl_generics Borrow<#id_ident #ty_generics> for #ident #ty_generics #where_clause {
-                #[inline]
-                fn borrow(&self) -> &#id_ident #ty_generics {
-                    unsafe { &*(self as *const Self as *const #id_ident #ty_generics ) }
-                }
-            }
-            #borrow_when_single_id
-            impl #impl_generics Hash for #ident #ty_generics #where_clause {
-                #[inline]
-                fn hash<H: Hasher>(&self, state: &mut H) {
-                    <#ident #ty_generics as Borrow<#id_ident #ty_generics>>::borrow(self).hash(state);
-                }
-            }
             #readonly_vis struct #id_hash_ident(u64);
-            impl From<u64> for #id_hash_ident {
+            impl core::borrow::Borrow<u64> for #id_hash_ident {
                 #[inline]
-                fn from(value: u64) -> Self { Self(value) }
-            }
-            impl Into<u64> for #id_hash_ident {
-                #[inline]
-                fn into(self) -> u64 { self.0 }
+                fn borrow(&self) -> &u64 {
+                    &self.0
+                }
             }
             impl #impl_generics mut_set::Item for #ident #ty_generics #where_clause {
-                type Id = #id_ident #ty_generics;
-                type BorrowId = #id_hash_ident;
+                type Id = #id_hash_ident;
                 type ImmutIdItem = #readonly_ident #ty_generics;
+                #[inline]
+                fn id<S: BuildHasher>(&self, __set: &mut_set::MutSet<Self, S>) -> Self::Id {
+                    let mut state = __set.hasher().build_hasher();
+                    #hash_impl
+                    #id_hash_ident(state.finish())
+                }
             }
             impl #impl_generics Deref for #readonly_ident #ty_generics #where_clause {
                 type Target = #ident #ty_generics;
@@ -448,11 +390,6 @@ fn rearrange_fields(
                 if !find {
                     notin_indices.push(f);
                 }
-                // if indices.contains(&i) {
-                //     in_indices.push(f)
-                // } else {
-                //     notin_indices.push(f)
-                // }
             }
         }
     }
@@ -669,18 +606,6 @@ struct BorrowType {
 
 impl syn::parse::Parse for BorrowType {
     fn parse(input: syn::parse::ParseStream) -> Result<Self> {
-        // let mut borrow_type = None;
-        // if input.peek(syn::Ident) && input.peek2(Token![=]) {
-        //     let ident: syn::Ident = input.parse()?;
-        //     if ident == "borrow" {
-        //         let _: Token![=] = input.parse()?;
-        //         let lit: Lit = input.parse()?;
-        //         if let Lit::Str(lit_str) = lit {
-        //             borrow_type = Some(parse_str(&lit_str.value())?);
-        //         }
-        //     }
-        // }
-        // Ok(Self(borrow_type))
         let mut borrow_type = None;
         let mut check_fn = None;
         while !input.is_empty() {

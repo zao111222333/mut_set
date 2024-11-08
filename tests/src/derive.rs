@@ -1,3 +1,4 @@
+extern crate mut_set;
 // cargo expand --manifest-path ./tests/Cargo.toml derive
 
 #[derive(Debug, derivative::Derivative, Clone)]
@@ -18,7 +19,7 @@ where
     pub(self) id1: usize,
     pub(crate) ctx1: T1,
     pub(super) ctx2: T2,
-    #[id]
+    #[id(borrow = "&str")]
     pub id2: String,
     #[id]
     pub id3: (),
@@ -54,7 +55,7 @@ fn test() {
         // v.id1 = 0;
     }
     println!("{:?}", set);
-    println!("{:?}", set.get(&MyItem::new_id(2, "www".to_string(), ())));
+    println!("{:?}", set.get(&MyItem::new_id(&set, &2, "www", &())));
     let new_item = MyItem {
         id1: 1,
         id2: "ww".to_string(),
@@ -62,9 +63,9 @@ fn test() {
         ctx2: "cccc".to_string(),
         id3: (),
     };
-    assert_eq!(set.get(&old_iterm), Some(&old_iterm));
+    assert_eq!(set.get(&MyItem::new_id(&set, &1, "ww", &())), Some(&old_iterm));
     assert_eq!(set.replace(new_item.clone()), Some(old_iterm));
-    assert_eq!(set.get(&new_item), Some(&new_item));
+    assert_eq!(set.get(&mut_set::Item::id(&new_item, &set)), Some(&new_item));
     println!("{:?}", set);
     for v in set.into_iter_sort() {
         println!("{:?}", v);

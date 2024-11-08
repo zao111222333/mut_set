@@ -64,6 +64,7 @@ pub mod derive {
     pub use mut_set_derive::item;
 }
 use core::{
+    borrow::Borrow,
     hash::{BuildHasher, Hash},
     ops::Deref,
 };
@@ -128,13 +129,20 @@ pub struct MutSet<T: Item, S: BuildHasher = RandomState> {
     inner: HashMap<u64, T, S>,
 }
 
+impl<T: Item, S: BuildHasher> MutSet<T, S> {
+    #[inline]
+    fn id(&self, item: &T) -> u64 {
+        *item.id(&self).borrow()
+    }
+}
+
 pub trait Item
 where
-    Self: Hash + Sized + MutSetDeref<Target = Self::ImmutIdItem>,
+    Self: Sized + MutSetDeref<Target = Self::ImmutIdItem>,
 {
-    type Id: Hash + ?Sized;
-    type BorrowId: Into<u64> + From<u64>;
+    type Id: Borrow<u64>;
     type ImmutIdItem: Deref<Target = Self>;
+    fn id<S: BuildHasher>(&self, __set: &MutSet<Self, S>) -> Self::Id;
 }
 
 pub trait MutSetDeref {

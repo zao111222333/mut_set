@@ -120,7 +120,7 @@ where
     fn next(&mut self) -> Option<&'a T> {
         loop {
             let elt = self.iter.next()?;
-            if !self.other.contains(elt) {
+            if !self.other.inner.contains_key(&self.other.id(elt)) {
                 return Some(elt);
             }
         }
@@ -138,10 +138,13 @@ where
         Self: Sized,
         F: FnMut(B, Self::Item) -> B,
     {
-        self.iter.fold(
-            init,
-            |acc, elt| if self.other.contains(elt) { acc } else { f(acc, elt) },
-        )
+        self.iter.fold(init, |acc, elt| {
+            if self.other.inner.contains_key(&self.other.id(elt)) {
+                acc
+            } else {
+                f(acc, elt)
+            }
+        })
     }
 }
 impl<'a, T, S> Clone for Intersection<'a, T, S>
@@ -201,7 +204,7 @@ where
     fn next(&mut self) -> Option<&'a T> {
         loop {
             let elt = self.iter.next()?;
-            if self.other.contains(elt) {
+            if self.other.inner.contains_key(&self.other.id(elt)) {
                 return Some(elt);
             }
         }
@@ -219,10 +222,13 @@ where
         Self: Sized,
         F: FnMut(B, Self::Item) -> B,
     {
-        self.iter.fold(
-            init,
-            |acc, elt| if self.other.contains(elt) { f(acc, elt) } else { acc },
-        )
+        self.iter.fold(init, |acc, elt| {
+            if self.other.inner.contains_key(&self.other.id(elt)) {
+                f(acc, elt)
+            } else {
+                acc
+            }
+        })
     }
 }
 impl<'a, T, S> Iterator for SymmetricDifference<'a, T, S>

@@ -47,7 +47,7 @@ fn test() {
         // v.id1 = 0;
     }
     println!("{:?}", set);
-    println!("{:?}", set.get_borrow(MyItem::borrow_id(&set, &2, "www", &None)));
+    println!("{:?}", set.get(&MyItem::new_id(&set, &2, "www", &None)));
     set.replace(MyItem {
         id1: 1,
         id2: "ww".to_string(),

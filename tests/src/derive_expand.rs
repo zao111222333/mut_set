@@ -20,35 +20,9 @@ mod __my_item {
     use super::*;
     use std::{
         borrow::Borrow,
-        hash::{Hash, Hasher},
+        hash::{BuildHasher, Hash, Hasher},
         ops::Deref,
     };
-    #[doc(hidden)]
-    #[derive(Debug, derivative::Derivative)]
-    #[derivative(Default)]
-    #[derivative(Default)]
-    #[repr(C)]
-    pub(in super::super) struct MyItemId<T1, T2>
-    where
-        T1: Sized,
-    {
-        #[derivative(Default(value = "8"))]
-        pub(super) id1: usize,
-        pub id2: String,
-        pub id3: (),
-        _p: std::marker::PhantomData<(T1, T2)>,
-    }
-    impl<T1, T2> Hash for MyItemId<T1, T2>
-    where
-        T1: Sized,
-    {
-        #[inline]
-        fn hash<H: Hasher>(&self, state: &mut H) {
-            Hash::hash(&self.id3, state);
-            Hash::hash(&self.id2, state);
-            Hash::hash(&self.id1, state);
-        }
-    }
     #[doc(hidden)]
     #[derive(Debug, derivative::Derivative)]
     #[derivative(Default)]
@@ -64,26 +38,28 @@ mod __my_item {
         pub(crate) ctx1: T1,
         pub(in super::super) ctx2: T2,
     }
+    #[allow(clippy::ref_option_ref)]
     impl<T1, T2> MyItem<T1, T2>
     where
         T1: Sized,
     {
-        #[inline]
-        pub(in super::super) fn new_id(
-            id1: usize,
-            id2: String,
-            id3: (),
-        ) -> MyItemId<T1, T2> {
-            MyItemId::<T1, T2> {
-                _p: std::marker::PhantomData::<(T1, T2)>,
-                id1,
-                id2,
-                id3,
+        const CHECK: () = {
+            fn id2(id: &String) -> &str {
+                id.borrow()
             }
-        }
+        };
         #[inline]
-        pub(in super::super) fn id(&self) -> &MyItemId<T1, T2> {
-            <MyItem<T1, T2> as Borrow<MyItemId<T1, T2>>>::borrow(self)
+        pub(in super::super) fn new_id<S: BuildHasher>(
+            __set: &mut_set::MutSet<MyItem<T1, T2>, S>,
+            id1: &usize,
+            id2: &str,
+            id3: &(),
+        ) -> <MyItem<T1, T2> as mut_set::Item>::Id {
+            let mut state = __set.hasher().build_hasher();
+            Hash::hash(&id1, &mut state);
+            Hash::hash(&id2, &mut state);
+            Hash::hash(&id3, &mut state);
+            MyItemId(state.finish())
         }
     }
     #[doc(hidden)]
@@ -125,32 +101,27 @@ mod __my_item {
             self.partial_cmp(other).unwrap_or(std::cmp::Ordering::Equal)
         }
     }
-    #[doc(hidden)]
-    impl<T1, T2> Borrow<MyItemId<T1, T2>> for MyItem<T1, T2>
-    where
-        T1: Sized,
-    {
+    pub(in super::super) struct MyItemId(u64);
+    impl core::borrow::Borrow<u64> for MyItemId {
         #[inline]
-        fn borrow(&self) -> &MyItemId<T1, T2> {
-            unsafe { &*(self as *const Self as *const MyItemId<T1, T2>) }
-        }
-    }
-    impl<T1, T2> Hash for MyItem<T1, T2>
-    where
-        T1: Sized,
-    {
-        #[inline]
-        fn hash<H: Hasher>(&self, state: &mut H) {
-            <MyItem<T1, T2> as Borrow<MyItemId<T1, T2>>>::borrow(self).hash(state);
+        fn borrow(&self) -> &u64 {
+            &self.0
         }
     }
     impl<T1, T2> mut_set::Item for MyItem<T1, T2>
     where
         T1: Sized,
     {
+        type Id = MyItemId;
         type ImmutIdItem = ImmutIdMyItem<T1, T2>;
-        type Id = MyItemId<T1, T2>;
-        type BorrowId = u64;
+        #[inline]
+        fn id<S: BuildHasher>(&self, __set: &mut_set::MutSet<Self, S>) -> Self::Id {
+            let mut state = __set.hasher().build_hasher();
+            Hash::hash(&self.id1, &mut state);
+            Hash::hash(&self.id2, &mut state);
+            Hash::hash(&self.id3, &mut state);
+            MyItemId(state.finish())
+        }
     }
     impl<T1, T2> Deref for ImmutIdMyItem<T1, T2>
     where

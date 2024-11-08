@@ -55,8 +55,8 @@ where
     S: BuildHasher + Default,
 {
     #[inline]
-    fn from(value: Vec<T>) -> Self {
-        value.into_iter().collect()
+    fn from(item: Vec<T>) -> Self {
+        item.into_iter().collect()
     }
 }
 
@@ -66,8 +66,8 @@ where
     S: BuildHasher + Default,
 {
     #[inline]
-    fn from(value: HashSet<T, S>) -> Self {
-        value.into_iter().collect()
+    fn from(item: HashSet<T, S>) -> Self {
+        item.into_iter().collect()
     }
 }
 
@@ -110,7 +110,7 @@ where
 {
     #[inline]
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
-        iter.into_iter().for_each(|v| _ = self.insert(v));
+        iter.into_iter().for_each(|item| _ = self.insert(item));
     }
 }
 
@@ -210,106 +210,21 @@ where
     pub fn shrink_to(&mut self, min_capacity: usize) {
         self.inner.shrink_to(min_capacity)
     }
-    /// Returns `true` if the set contains a value.
-    ///
-    /// The value may be any borrowed form of the set's value type, but
-    /// [`Hash`] and [`Eq`] on the borrowed form *must* match those for
-    /// the value type.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::collections::HashSet;
-    ///
-    /// let set = HashSet::from([1, 2, 3]);
-    /// assert_eq!(set.contains(&1), true);
-    /// assert_eq!(set.contains(&4), false);
-    /// ```
     #[inline]
-    pub fn contains<Q>(&self, value: &Q) -> bool
-    where
-        T: Borrow<Q>,
-        Q: Hash + ?Sized,
-    {
-        self.inner.contains_key(&self.hash_one(value))
+    pub fn contains(&self, id: &T::Id) -> bool {
+        self.inner.contains_key(id.borrow())
     }
     #[inline]
-    pub fn contains_borrow(&self, borrow_id: T::BorrowId) -> bool {
-        self.inner.contains_key(&borrow_id.into())
+    pub fn get(&self, id: &T::Id) -> Option<&T> {
+        self.inner.get(id.borrow())
+    }
+    #[inline]
+    pub fn get_mut(&mut self, id: &T::Id) -> Option<&mut <T as Item>::ImmutIdItem> {
+        self.inner.get_mut(id.borrow()).map(MutSetDeref::mut_set_deref)
     }
 
-    /// Returns a reference to the value in the set, if any, that is equal to the given value.
-    ///
-    /// The value may be any borrowed form of the set's value type, but
-    /// [`Hash`] and [`Eq`] on the borrowed form *must* match those for
-    /// the value type.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::collections::HashSet;
-    ///
-    /// let set = HashSet::from([1, 2, 3]);
-    /// assert_eq!(set.get(&2), Some(&2));
-    /// assert_eq!(set.get(&4), None);
-    /// ```
-    #[inline]
-    pub fn get<Q>(&self, value: &Q) -> Option<&T>
-    where
-        T: Borrow<Q>,
-        Q: Hash + ?Sized,
-    {
-        match self.inner.get(&self.hash_one(value)) {
-            Some(v) => Some(v),
-            None => None,
-        }
-    }
-    #[inline]
-    pub fn get_borrow(&self, borrow_id: T::BorrowId) -> Option<&T> {
-        match self.inner.get(&borrow_id.into()) {
-            Some(v) => Some(v),
-            None => None,
-        }
-    }
-
-    /// Returns a mutable reference to the value corresponding to the key.
-    ///
-    /// The key may be any borrowed form of the map's key type, but
-    /// [`Hash`] and [`Eq`] on the borrowed form *must* match those for
-    /// the key type.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::collections::HashMap;
-    ///
-    /// let mut map = HashMap::new();
-    /// map.insert(1, "a");
-    /// if let Some(x) = map.get_mut(&1) {
-    ///     *x = "b";
-    /// }
-    /// assert_eq!(map[&1], "b");
-    /// ```
-    #[inline]
-    pub fn get_mut<Q>(&mut self, value: &Q) -> Option<&mut <T as Item>::ImmutIdItem>
-    where
-        T: Borrow<Q>,
-        Q: Hash + ?Sized,
-    {
-        self.inner
-            .get_mut(&self.hash_one(value))
-            .map(MutSetDeref::mut_set_deref)
-    }
-    #[inline]
-    pub fn get_mut_borrow(
-        &mut self,
-        borrow_id: T::BorrowId,
-    ) -> Option<&mut <T as Item>::ImmutIdItem> {
-        self.inner.get_mut(&borrow_id.into()).map(MutSetDeref::mut_set_deref)
-    }
-
-    // /// Inserts the given `value` into the set if it is not present, then
-    // /// returns a reference to the value in the set.
+    // /// Inserts the given `item` into the set if it is not present, then
+    // /// returns a reference to the item in the set.
     // ///
     // /// # Examples
     // ///
@@ -326,19 +241,19 @@ where
     // /// ```
     // #[inline]
     // // #[unstable(feature = "hash_raw_entry", issue = "56167")]
-    // pub fn get_or_insert(&mut self, value: T) -> &T {
+    // pub fn get_or_insert(&mut self, item: T) -> &T {
     //     // Although the raw entry gives us `&mut T`, we only return `&T` to be consistent with
     //     // `get`. Key mutation is "raw" because you're not supposed to affect `Eq` or `Hash`.
-    //     let key = self.hash_one(&value);
+    //     let key = self.hash_one(&item);
     //     self.inner
     //         .raw_entry_mut()
     //         .from_key(&key)
-    //         .or_insert(key, value.into())
+    //         .or_insert(key, item.into())
     //         .1
     // }
 
-    // /// Inserts an owned copy of the given `value` into the set if it is not
-    // /// present, then returns a reference to the value in the set.
+    // /// Inserts an owned copy of the given `item` into the set if it is not
+    // /// present, then returns a reference to the item in the set.
     // ///
     // /// # Examples
     // ///
@@ -352,21 +267,21 @@ where
     // ///
     // /// assert_eq!(set.len(), 3);
     // /// for &pet in &["cat", "dog", "fish"] {
-    // ///     let value = set.get_or_insert_owned(pet);
-    // ///     assert_eq!(value, pet);
+    // ///     let item = set.get_or_insert_owned(pet);
+    // ///     assert_eq!(item, pet);
     // /// }
     // /// assert_eq!(set.len(), 4); // a new "fish" was inserted
     // /// ```
     // #[inline]
-    // pub fn get_or_insert_owned<Q: ?Sized>(&mut self, value: &Q) -> &T
+    // pub fn get_or_insert_owned<Q: ?Sized>(&mut self, item: &Q) -> &T
     // where
     //     T: Borrow<Q>,
     //     Q: Hash + ToOwned<Owned = T>,
     // {
     //     // Although the raw entry gives us `&mut T`, we only return `&T` to be consistent with
     //     // `get`. Key mutation is "raw" because you're not supposed to affect `Eq` or `Hash`.
-    //     let key = self.hash_one(&value);
-    //     // let v_ = value.to_owned().into();
+    //     let key = self.hash_one(&item);
+    //     // let v_ = item.to_owned().into();
     //     match self.inner.get(&key){
     //         Some(v) => return &v,
     //         None => todo!(),
@@ -375,15 +290,15 @@ where
     //         Some(_) => todo!(),
     //         None => todo!(),
     //     }
-    //     // match self.get(value){
+    //     // match self.get(item){
     //     //     Some(t) => return t,
-    //     //     None => self.insert(value.to_owned()).expect("www").deref(),
+    //     //     None => self.insert(item.to_owned()).expect("www").deref(),
     //     // }
-    //     // self.inner.get_or_insert_owned(value)
+    //     // self.inner.get_or_insert_owned(item)
     // }
 
-    // /// Inserts a value computed from `f` into the set if the given `value` is
-    // /// not present, then returns a reference to the value in the set.
+    // /// Inserts a item computed from `f` into the set if the given `item` is
+    // /// not present, then returns a reference to the item in the set.
     // ///
     // /// # Examples
     // ///
@@ -397,13 +312,13 @@ where
     // ///
     // /// assert_eq!(set.len(), 3);
     // /// for &pet in &["cat", "dog", "fish"] {
-    // ///     let value = set.get_or_insert_with(pet, str::to_owned);
-    // ///     assert_eq!(value, pet);
+    // ///     let item = set.get_or_insert_with(pet, str::to_owned);
+    // ///     assert_eq!(item, pet);
     // /// }
     // /// assert_eq!(set.len(), 4); // a new "fish" was inserted
     // /// ```
     // #[inline]
-    // pub fn get_or_insert_with<Q: ?Sized, F>(&mut self, value: &Q, f: F) -> &T
+    // pub fn get_or_insert_with<Q: ?Sized, F>(&mut self, item: &Q, f: F) -> &T
     // where
     //     T: Borrow<Q>,
     //     Q: Hash + Eq,
@@ -411,7 +326,7 @@ where
     // {
     //     // Although the raw entry gives us `&mut T`, we only return `&T` to be consistent with
     //     // `get`. Key mutation is "raw" because you're not supposed to affect `Eq` or `Hash`.
-    //     self.inner.get_or_insert_with(value, f)
+    //     self.inner.get_or_insert_with(item, f)
     // }
 
     /// Returns `true` if `self` has no elements in common with `other`.
@@ -433,14 +348,14 @@ where
     /// ```
     pub fn is_disjoint(&self, other: &MutSet<T, S>) -> bool {
         if self.len() <= other.len() {
-            self.iter().all(|v| !other.contains(v))
+            self.iter().all(|item| !other.inner.contains_key(&other.id(item)))
         } else {
-            other.iter().all(|v| !self.contains(v))
+            other.iter().all(|item| !self.inner.contains_key(&self.id(item)))
         }
     }
 
     /// Returns `true` if the set is a subset of another,
-    /// i.e., `other` contains at least all the values in `self`.
+    /// i.e., `other` contains at least all the items in `self`.
     ///
     /// # Examples
     ///
@@ -458,14 +373,14 @@ where
     /// ```
     pub fn is_subset(&self, other: &MutSet<T, S>) -> bool {
         if self.len() <= other.len() {
-            self.iter().all(|v| other.contains(v))
+            self.iter().all(|item| other.inner.contains_key(&other.id(item)))
         } else {
             false
         }
     }
 
     /// Returns `true` if the set is a superset of another,
-    /// i.e., `self` contains at least all the values in `other`.
+    /// i.e., `self` contains at least all the items in `other`.
     ///
     /// # Examples
     ///
@@ -489,14 +404,14 @@ where
         other.is_subset(self)
     }
 
-    /// Adds a value to the set.
+    /// Adds a item to the set.
     ///
-    /// Returns whether the value was newly inserted. That is:
+    /// Returns whether the item was newly inserted. That is:
     ///
-    /// - If the set did not previously contain this value, `true` is returned.
-    /// - If the set already contained this value, `false` is returned,
-    ///   and the set is not modified: original value is not replaced,
-    ///   and the value passed as argument is dropped.
+    /// - If the set did not previously contain this item, `true` is returned.
+    /// - If the set already contained this item, `false` is returned,
+    ///   and the set is not modified: original item is not replaced,
+    ///   and the item passed as argument is dropped.
     ///
     /// # Examples
     ///
@@ -510,26 +425,17 @@ where
     /// assert_eq!(set.len(), 1);
     /// ```
     #[inline]
-    pub fn insert(&mut self, v: T) -> bool {
-        let key = self.hash_one(&v);
-        if let Entry::Vacant(e) = self.inner.entry(key) {
-            e.insert(v);
+    pub fn insert(&mut self, item: T) -> bool {
+        if let Entry::Vacant(e) = self.inner.entry(self.id(&item)) {
+            e.insert(item);
             true
         } else {
             false
         }
     }
-    #[inline]
-    pub fn hash_one<Q>(&self, v: &Q) -> u64
-    where
-        T: Borrow<Q>,
-        Q: Hash + ?Sized,
-    {
-        self.inner.hasher().hash_one(v)
-    }
 
-    /// Adds a value to the set, replacing the existing value, if any, that is equal to the given
-    /// one. Returns the replaced value.
+    /// Adds a item to the set, replacing the existing item, if any, that is equal to the given
+    /// one. Returns the replaced item.
     ///
     /// # Examples
     ///
@@ -544,67 +450,17 @@ where
     /// assert_eq!(set.get(&[][..]).unwrap().capacity(), 10);
     /// ```
     #[inline]
-    pub fn replace(&mut self, value: T) -> Option<T> {
-        self.inner.insert(self.hash_one(&value), value)
-    }
-
-    /// Removes a value from the set. Returns whether the value was
-    /// present in the set.
-    ///
-    /// The value may be any borrowed form of the set's value type, but
-    /// [`Hash`] and [`Eq`] on the borrowed form *must* match those for
-    /// the value type.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::collections::HashSet;
-    ///
-    /// let mut set = HashSet::new();
-    ///
-    /// set.insert(2);
-    /// assert_eq!(set.remove(&2), true);
-    /// assert_eq!(set.remove(&2), false);
-    /// ```
-    #[inline]
-    pub fn remove<Q>(&mut self, value: &Q) -> bool
-    where
-        T: Borrow<Q>,
-        Q: Hash + ?Sized,
-    {
-        self.inner.remove(&self.hash_one(value)).is_some()
+    pub fn replace(&mut self, item: T) -> Option<T> {
+        self.inner.insert(self.id(&item), item)
     }
 
     #[inline]
-    pub fn remove_borrow(&mut self, borrow_id: T::BorrowId) -> bool {
-        self.inner.remove(&borrow_id.into()).is_some()
-    }
-    /// Removes and returns the value in the set, if any, that is equal to the given one.
-    ///
-    /// The value may be any borrowed form of the set's value type, but
-    /// [`Hash`] and [`Eq`] on the borrowed form *must* match those for
-    /// the value type.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::collections::HashSet;
-    ///
-    /// let mut set = HashSet::from([1, 2, 3]);
-    /// assert_eq!(set.take(&2), Some(2));
-    /// assert_eq!(set.take(&2), None);
-    /// ```
-    #[inline]
-    pub fn take<Q>(&mut self, value: &Q) -> Option<T>
-    where
-        T: Borrow<Q>,
-        Q: Hash + ?Sized,
-    {
-        self.inner.remove(&self.hash_one(value))
+    pub fn remove(&mut self, id: &T::Id) -> bool {
+        self.inner.remove(id.borrow()).is_some()
     }
     #[inline]
-    pub fn take_borrow(&mut self, borrow_id: T::BorrowId) -> Option<T> {
-        self.inner.remove(&borrow_id.into())
+    pub fn take(&mut self, id: &T::Id) -> Option<T> {
+        self.inner.remove(id.borrow())
     }
 }
 
@@ -750,10 +606,10 @@ where
     //     self.inner.drain().into_iter().collect()
     // }
 
-    //     /// Creates an iterator which uses a closure to determine if a value should be removed.
+    //     /// Creates an iterator which uses a closure to determine if a item should be removed.
     //     ///
-    //     /// If the closure returns true, then the value is removed and yielded.
-    //     /// If the closure returns false, the value will remain in the list and will not be yielded
+    //     /// If the closure returns true, then the item is removed and yielded.
+    //     /// If the closure returns false, the item will remain in the list and will not be yielded
     //     /// by the iterator.
     //     ///
     //     /// If the returned `ExtractIf` is not exhausted, e.g. because it is dropped without iterating
@@ -764,7 +620,7 @@ where
     //     ///
     //     /// # Examples
     //     ///
-    //     /// Splitting a set into even and odd values, reusing the original set:
+    //     /// Splitting a set into even and odd items, reusing the original set:
     //     ///
     //     /// ```
     //     /// #![feature(hash_extract_if)]
@@ -820,10 +676,10 @@ where
         F: FnMut(&T) -> bool,
     {
         let mut f_mut = f;
-        self.inner.retain(|_, v| f_mut(&*v))
+        self.inner.retain(|_, item| f_mut(&*item))
     }
 
-    /// Clears the set, removing all values.
+    /// Clears the set, removing all items.
     ///
     /// # Examples
     ///
