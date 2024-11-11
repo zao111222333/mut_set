@@ -15,13 +15,16 @@ where
     T1: Sized,
 {
     #[id]
+    #[size = 8]
     #[derivative(Default(value = "8"))]
     pub(self) id1: usize,
     pub(crate) ctx1: T1,
     pub(super) ctx2: T2,
     #[id(borrow = "&str")]
+    #[size = 24]
     pub id2: String,
     #[id]
+    #[size = 0]
     pub id3: (),
 }
 

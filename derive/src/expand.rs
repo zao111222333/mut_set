@@ -1,8 +1,10 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
+use itertools::Itertools;
 use proc_macro2::{Span, TokenStream, TokenTree};
 use quote::{quote, ToTokens};
 use syn::parse::Parse;
+use syn::spanned::Spanned;
 use syn::visit_mut::{self, VisitMut};
 use syn::{
     parse_quote, parse_str, token, Attribute, Data, DeriveInput, Error, Expr, Field,
@@ -28,7 +30,7 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
     let mut input = input;
 
     let mut attr_errors = Vec::new();
-    let indices = find_and_strip_readonly_attrs(&mut input, &mut attr_errors);
+    let (id_idx, sizes) = find_and_strip_readonly_attrs(&mut input, &mut attr_errors);
 
     let original_input = quote! {
         #[cfg(doc)]
@@ -57,17 +59,14 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
     for macro_s in macro_set {
         let m: syn::Meta = syn::parse_str(&macro_s)?;
         readonly.attrs.push(parse_quote!(#[#m]));
-        // id.attrs.push(parse_quote!(#[#m]));
     }
     let repr_vec = has_defined_repr(&input);
     if repr_vec.is_empty() {
         input.attrs.push(parse_quote!(#[repr(C)]));
         readonly.attrs.push(parse_quote!(#[repr(C)]));
-        // id.attrs.push(parse_quote!(#[repr(C)]));
     } else {
         for attr in repr_vec {
             readonly.attrs.push(attr.clone());
-            // id.attrs.push(attr);
         }
     }
     readonly.vis = to_super(&input.vis);
@@ -79,24 +78,23 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
     let mut borrow_check = quote!();
     let mut hash_impl = quote!();
     let mut id_hash_impl = quote!();
-    let mut into_fields = quote!();
+    // let mut into_fields = quote!();
     let mut partial_cmp = quote!();
     let mut partial_eq = quote!();
-    if indices.is_empty() {
+    if id_idx.is_empty() {
         return Err(Error::new(call_site, "at least specify one `#[id]`"));
     }
     for (i, f) in readonly_fields.iter_mut().enumerate() {
         f.attrs = attr_filter_fn(&f.attrs);
-        if indices.iter().any(|(idx, _)| idx == &i) {
+        if id_idx.iter().any(|(idx, _, _)| idx == &i) {
             f.vis = Visibility::Inherited;
         } else {
             f.vis = to_super(&f.vis);
         }
     }
 
-    let (_id_fields, _other_fields) = rearrange_fields(input_fields, &indices);
-    // id_fields.clear();
-    for (f, borrow_type) in _id_fields.iter() {
+    rearrange_fields(input_fields, &sizes);
+    for (_, f, borrow_type) in id_idx.iter() {
         let t = f.ty.clone();
         let i = f.ident.clone();
         hash_impl = quote! {
@@ -135,20 +133,20 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
             id_hash_func_input = quote! {#i: &#t, #id_hash_func_input};
         }
         // id_func_fields = quote! {&self.#i, #id_func_fields};
-        into_fields = quote! {#i:value.#i, #into_fields};
+        // into_fields = quote! {#i:value.#i, #into_fields};
     }
     if sort {
-        let i = _id_fields[0].0.ident.clone();
+        let i = id_idx[0].1.ident.clone();
         partial_eq = quote! {#partial_eq
             self.#i == other.#i
         };
-        for (f, _) in _id_fields.iter().skip(1) {
+        for (_, f, _) in id_idx.iter().skip(1) {
             let i = f.ident.clone();
             partial_eq = quote! {#partial_eq
                 && self.#i == other.#i
             };
         }
-        for (f, _) in _id_fields.iter().skip(1) {
+        for (_, f, _) in id_idx.iter().skip(1) {
             let i = f.ident.clone();
             partial_cmp = quote! {
                 match self.#i.partial_cmp(&other.#i) {
@@ -158,23 +156,18 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
                 #partial_cmp
             };
         }
-        let i = _id_fields[0].0.ident.clone();
+        let i = id_idx[0].1.ident.clone();
         partial_cmp = quote! {#partial_cmp
             self.#i.partial_cmp(&other.#i)
         };
     }
 
-    for (mut f, _) in _id_fields.clone().into_iter().rev() {
+    for (_, mut f, _) in id_idx.clone().into_iter().rev() {
         f.attrs = attr_filter_fn(&f.attrs);
         f.vis = to_super(&f.vis);
-        // id_fields.push(f);
-    }
-    for f in _other_fields.into_iter() {
-        let i = f.ident;
-        into_fields = quote! {#i:value.#i, #into_fields};
     }
 
-    rearrange_fields(readonly_fields, &indices);
+    rearrange_fields(readonly_fields, &sizes);
     let ident = &input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
     let self_path: Path = parse_quote!(#ident #ty_generics);
@@ -320,13 +313,17 @@ fn fields_of_input(input: &mut DeriveInput) -> &mut Punctuated {
 fn find_and_strip_readonly_attrs(
     input: &mut DeriveInput,
     errors: &mut Vec<Error>,
-) -> Vec<(usize, BorrowType)> {
-    let mut indices = Vec::new();
+) -> (Vec<(usize, Field, BorrowType)>, Vec<Option<usize>>) {
+    let mut id_idx = Vec::new();
+    let mut sizes = Vec::new();
 
     for (i, field) in fields_of_input(input).iter_mut().enumerate() {
+        let mut borrow_type = None;
+        let mut size = None;
+        let mut j1j2 = [None, None];
         for (j, attr) in field.attrs.iter().enumerate() {
             if attr.path().is_ident("id") {
-                let borrow_type = match attr.meta {
+                borrow_type = Some(match attr.meta {
                     syn::Meta::Path(_) => BorrowType::default(),
                     syn::Meta::List(_) => match attr.parse_args_with(BorrowType::parse) {
                         Ok(t) => t,
@@ -336,14 +333,48 @@ fn find_and_strip_readonly_attrs(
                         }
                     },
                     syn::Meta::NameValue(_) => todo!(),
+                });
+                j1j2[0] = Some(j);
+            }
+            if attr.path().is_ident("size") {
+                match &attr.meta {
+                    syn::Meta::List(_) | syn::Meta::Path(_) => errors
+                        .push(Error::new(attr.meta.span(), "expected #[size = 123 ]")),
+                    syn::Meta::NameValue(s) => 'm: {
+                        if let syn::Expr::Lit(expr_lit) = &s.value {
+                            if let syn::Lit::Int(lit_int) = &expr_lit.lit {
+                                match lit_int.base10_parse::<usize>() {
+                                    Ok(n) => size = Some(n),
+                                    Err(e) => errors.push(e),
+                                }
+                                break 'm;
+                            }
+                        }
+                        errors.push(syn::Error::new(
+                            attr.meta.span(),
+                            "Expected integer literal",
+                        ))
+                    }
                 };
-                field.attrs.remove(j);
-                indices.push((i, borrow_type));
-                break;
+                j1j2[1] = Some(j);
             }
         }
+        match j1j2 {
+            [None, None] => {}
+            [None, Some(j2)] => _ = field.attrs.remove(j2),
+            [Some(j1), None] => _ = field.attrs.remove(j1),
+            [Some(j1), Some(j2)] => {
+                _ = field.attrs.remove(j1.max(j2));
+                _ = field.attrs.remove(j1.min(j2));
+            }
+        }
+        sizes.push(size);
+        if let Some(borrow_type) = borrow_type {
+            id_idx.push((i, field.clone(), borrow_type));
+        }
     }
-    indices
+    id_idx.reverse();
+    (id_idx, sizes)
 }
 
 struct ReplaceSelf<'a> {
@@ -368,38 +399,22 @@ impl<'a> VisitMut for ReplaceSelf<'a> {
     }
 }
 
-fn rearrange_fields(
-    input_fields: &mut Punctuated,
-    indices: &[(usize, BorrowType)],
-) -> (Vec<(Field, BorrowType)>, Vec<Field>) {
-    let mut in_indices = Vec::new();
-    let mut notin_indices = Vec::new();
-    let mut i = input_fields.len();
-    while let Some(p) = input_fields.pop() {
-        i -= 1;
-        match p {
-            syn::punctuated::Pair::Punctuated(f, _) | syn::punctuated::Pair::End(f) => {
-                let mut find = false;
-                'L: for (idx, borrow_type) in indices {
-                    if &i == idx {
-                        find = true;
-                        in_indices.push((f.clone(), borrow_type.clone()));
-                        break 'L;
-                    }
-                }
-                if !find {
-                    notin_indices.push(f);
-                }
-            }
-        }
+fn rearrange_fields(input_fields: &mut Punctuated, sizes: &[Option<usize>]) {
+    let mut fields: Vec<_> = input_fields
+        .iter()
+        .zip_eq(sizes)
+        .map(|(f, size)| (f.clone(), size))
+        .collect();
+    input_fields.clear();
+    fields.sort_by(|(_, a), (_, b)| match (a, b) {
+        (None, None) => std::cmp::Ordering::Equal,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (Some(a), Some(b)) => b.cmp(a),
+    });
+    for (f, _) in fields.into_iter() {
+        input_fields.push(f);
     }
-    for (f, _) in in_indices.iter().rev() {
-        input_fields.push(f.clone());
-    }
-    for f in notin_indices.iter().rev() {
-        input_fields.push(f.clone());
-    }
-    (in_indices, notin_indices)
 }
 
 fn to_snake_case(s: &str) -> String {
@@ -415,6 +430,7 @@ fn to_snake_case(s: &str) -> String {
 }
 fn to_super(vis: &Visibility) -> Visibility {
     match vis {
+        Visibility::Inherited => parse_quote!(pub(super)),
         Visibility::Restricted(vis_r) => {
             let path = vis_r.path.to_token_stream().to_string();
             if path.starts_with("crate") {
@@ -437,7 +453,7 @@ fn to_super(vis: &Visibility) -> Visibility {
                 }
             }
         }
-        _ => vis.clone(),
+        Visibility::Public(_) => parse_quote!(pub),
     }
 }
 
@@ -575,6 +591,31 @@ fn parser_args(args: TokenStream) -> Result<(bool, HashSet<String>, HashSet<Stri
         return Err(Error::new(call_site, format!("want nothing, find `{}`", arg)));
     }
     Ok((sort, macro_set, attri_set))
+}
+#[test]
+fn size_type_test() {
+    // let attr: Attribute = parse_quote!(#[id]);
+    // let attr: Attribute = parse_quote!(#[id(borrow="&[ArcStr]")] );
+    let attr: Attribute = parse_quote!(#[size = 2]);
+    if attr.path().is_ident("size") {
+        match &attr.meta {
+            syn::Meta::List(_) | syn::Meta::Path(_) => {
+                _ = dbg!(Error::new(attr.meta.span(), "expected #[size = 123 ]"))
+            }
+            syn::Meta::NameValue(s) => {
+                if let syn::Expr::Lit(expr_lit) = &s.value {
+                    if let syn::Lit::Int(lit_int) = &expr_lit.lit {
+                        dbg!(lit_int.base10_parse::<usize>());
+                    } else {
+                        dbg!(syn::Error::new(
+                            attr.meta.span(),
+                            "Expected integer literal"
+                        ));
+                    }
+                }
+            }
+        };
+    }
 }
 #[test]
 fn borrow_type_test() {

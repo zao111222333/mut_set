@@ -8,13 +8,16 @@ where
     T1: Sized,
 {
     #[id]
-    #[derivative(Default(value = "8"))]
+    #[size = 8]
+    #[derivative(Default(value = "3"))]
     pub(self) id1: usize,
     pub(crate) ctx1: T1,
     pub(super) ctx2: T2,
     #[id(borrow = "&str")]
+    #[size = 24]
     pub id2: String,
     #[id(borrow = "Option<&str>", check_fn = "mut_set::borrow_option!")]
+    #[size = 24]
     pub id3: Option<String>,
 }
 
