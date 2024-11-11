@@ -41,3 +41,10 @@ struct WithoutLayout {
     #[id]
     id5: bool,
 }
+
+#[test]
+fn assert_size() {
+    assert_eq!(80, std::mem::size_of::<RustLayout>());
+    assert_eq!(80, std::mem::size_of::<WithLayout>());
+    assert_eq!(88, std::mem::size_of::<WithoutLayout>());
+}

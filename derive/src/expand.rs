@@ -1,8 +1,7 @@
-use std::collections::{HashMap, HashSet};
-
 use itertools::Itertools;
 use proc_macro2::{Span, TokenStream, TokenTree};
 use quote::{quote, ToTokens};
+use std::collections::HashSet;
 use syn::parse::Parse;
 use syn::spanned::Spanned;
 use syn::visit_mut::{self, VisitMut};
