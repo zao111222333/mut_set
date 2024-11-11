@@ -1,4 +1,13 @@
 /// size = 80 (0x50), align = 0x8
+struct RustLayout {
+    id1: String,
+    id2: String,
+    id3: bool,
+    id4: String,
+    id5: bool,
+}
+
+/// size = 80 (0x50), align = 0x8
 #[mut_set::derive::item]
 struct WithLayout {
     #[id]
