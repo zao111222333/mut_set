@@ -1,12 +1,12 @@
 use proc_macro2::{Span, TokenStream, TokenTree};
 use quote::{quote, ToTokens};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use syn::parse::Parse;
 use syn::spanned::Spanned;
 use syn::visit_mut::{self, VisitMut};
 use syn::{
-    parse_quote, parse_str, token, Attribute, Data, DeriveInput, Error, Expr, Field,
-    Fields, Ident, Lit, Path, Result, Token, Visibility,
+    parse_quote, parse_str, token, Data, DeriveInput, Error, Expr, Field, Fields, Ident,
+    Lit, Path, Result, Token, Visibility,
 };
 
 type Punctuated = syn::punctuated::Punctuated<Field, Token![,]>;
@@ -33,24 +33,7 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
     let mut readonly = input.clone();
     readonly.attrs.clear();
     readonly.attrs.push(parse_quote!(#[doc(hidden)]));
-    let (sort, macro_set, attri_set) = parser_args(args)?;
-    let attr_filter_fn = |v: &Vec<Attribute>| -> Vec<Attribute> {
-        let mut _v = vec![];
-        for attr in v.iter() {
-            let s = attr.meta.to_token_stream().to_string();
-            for filter_s in &attri_set {
-                if s.starts_with(filter_s) {
-                    _v.push(attr.clone());
-                    break;
-                }
-            }
-        }
-        _v
-    };
-    for macro_s in macro_set {
-        let m: syn::Meta = syn::parse_str(&macro_s)?;
-        readonly.attrs.push(parse_quote!(#[#m]));
-    }
+    let sort = parser_args(args)?;
     let repr_vec = has_defined_repr(&input);
     if repr_vec.is_empty() {
         input.attrs.push(parse_quote!(#[repr(C)]));
@@ -74,7 +57,7 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
         return Err(Error::new(call_site, "at least specify one `#[id]`"));
     }
     for (i, f) in readonly_fields.iter_mut().enumerate() {
-        f.attrs = attr_filter_fn(&f.attrs);
+        f.attrs.clear();
         if id_idx_field_type.iter().any(|(idx, _, _)| idx == &i) {
             f.vis = Visibility::Inherited;
         } else {
@@ -92,7 +75,7 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
             Hash::hash(&#i, &mut state);
             #id_hash_impl
         };
-        id_func_input = quote! {#i: #t, #id_func_input};
+        id_func_input = quote! {#i, #id_func_input};
         if let Some(borrow_t) = &borrow_type.borrow_type {
             borrow_check = if let Some(check_fn) = &borrow_type.check_fn {
                 quote! {
@@ -105,12 +88,8 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
                     #borrow_check
                 }
             };
-            let mut leading_ref = false;
-            if let Some(TokenTree::Punct(p)) = borrow_t.clone().into_iter().next() {
-                if p.as_char() == '&' {
-                    leading_ref = true;
-                }
-            }
+            let leading_ref = borrow_t.to_string().starts_with("&")
+                || borrow_t.to_string().starts_with("Option <&");
             id_hash_func_input = if leading_ref {
                 quote! {#i: #borrow_t, #id_hash_func_input}
             } else {
@@ -146,15 +125,24 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
             self.#i.partial_cmp(&other.#i)
         };
     }
-
-    for (_, mut f, _) in id_idx_field_type.clone().into_iter().rev() {
-        f.attrs = attr_filter_fn(&f.attrs);
-        f.vis = to_super(&f.vis);
-    }
-    // #[cfg(not(feature = "__dbg_disable_mem_layout"))]
-    // rearrange_fields(readonly_fields, &sizes);
     let ident = &input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+    let mut hash_impl_generics: syn::Generics = parse_quote!(#impl_generics);
+    let mut hash_ty_generics: syn::Generics = parse_quote!(#ty_generics);
+    if hash_impl_generics.params.is_empty() {
+        hash_impl_generics = parse_quote!(<S: BuildHasher + Default>);
+    } else {
+        hash_impl_generics
+            .params
+            .insert(0, parse_quote!(S: BuildHasher + Default));
+    }
+    if hash_ty_generics.params.is_empty() {
+        hash_ty_generics = parse_quote!(<S>);
+    } else {
+        hash_ty_generics.params.insert(0, parse_quote!(S));
+    }
+    let mut life_hash_impl_generics = hash_impl_generics.clone();
+    life_hash_impl_generics.params.insert(0, parse_quote!('a));
     let self_path: Path = parse_quote!(#ident #ty_generics);
     for field in readonly_fields {
         ReplaceSelf::new(&self_path).visit_type_mut(&mut field.ty);
@@ -163,6 +151,7 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
     readonly.ident = Ident::new(&format!("ImmutId{}", input.ident), call_site);
     let id_hash_ident = Ident::new(&format!("{}Id", input.ident), call_site);
     let readonly_ident = &readonly.ident;
+    let mut_set_ident = Ident::new(&format!("MutSet{}", input.ident), call_site);
     let mod_name =
         Ident::new(&format!("__{}", to_snake_case(&ident.to_string())), call_site);
 
@@ -200,13 +189,13 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
         #input
         #[doc(hidden)]
         #[expect(clippy::field_scoped_visibility_modifiers)]
-        mod #mod_name{
+        mod #mod_name {
             #[expect(clippy::wildcard_imports)]
             use super::*;
             use core::{
                 borrow::Borrow,
                 hash::{Hash,Hasher,BuildHasher},
-                ops::{Deref},
+                ops::{Deref, DerefMut},
             };
 
             #readonly
@@ -227,15 +216,122 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
             }
             #sort_quote
             #readonly_vis struct #id_hash_ident(u64);
-            impl core::borrow::Borrow<u64> for #id_hash_ident {
+            impl core::borrow::Borrow<u64> for #id_hash_ident{
                 #[inline]
                 fn borrow(&self) -> &u64 {
                     &self.0
                 }
             }
+            #[derive(Debug, Clone, Default)]
+            #readonly_vis struct #mut_set_ident #hash_impl_generics(mut_set::MutSet<#ident #ty_generics, S>);
+            impl #hash_impl_generics #mut_set_ident #hash_ty_generics #where_clause {
+                #[inline]
+                #readonly_vis fn serialize_with<Se: serde::Serializer>(
+                &self,
+                serializer: Se,
+                ) -> Result<Se::Ok, Se::Error> {
+                    use serde::Serialize;
+                    let mut_set: &mut_set::MutSet<_, _> = &self;
+                    mut_set.serialize(serializer)
+                }
+                #[inline]
+                #readonly_vis fn deserialize_with<'de, De: serde::Deserializer<'de>>(
+                deserializer: De,
+                ) -> Result<Self, De::Error> {
+                    let mut_set: mut_set::MutSet<#ident #ty_generics, S> = serde::Deserialize::deserialize(deserializer)?;
+                    Ok(mut_set.into())
+                }
+                #[inline]
+                #readonly_vis fn contains(
+                    &self, #id_hash_func_input
+                ) -> bool {
+                    let id = #ident::new_id(&self, #id_func_input);
+                    self.id_contains(&id)
+                }
+                #[inline]
+                #readonly_vis fn get(
+                    &self, #id_hash_func_input
+                ) -> Option<&#ident #ty_generics> {
+                    let id = #ident::new_id(&self, #id_func_input);
+                    self.id_get(&id)
+                }
+                #[inline]
+                #readonly_vis fn get_mut(
+                    &mut self, #id_hash_func_input
+                ) -> Option<&mut #readonly_ident #ty_generics> {
+                    let id = #ident::new_id(&self, #id_func_input);
+                    self.id_get_mut(&id)
+                }
+                #[inline]
+                #readonly_vis fn remove(
+                    &mut self, #id_hash_func_input
+                ) -> bool {
+                    let id = #ident::new_id(&self, #id_func_input);
+                    self.id_remove(&id)
+                }
+                #[inline]
+                pub(in super::super) fn take(
+                    &mut self, #id_hash_func_input
+                ) -> Option<#ident #ty_generics> {
+                    let id = #ident::new_id(&self, #id_func_input);
+                    self.id_take(&id)
+                }
+            }
+            impl #hash_impl_generics Deref for #mut_set_ident #hash_ty_generics #where_clause {
+                type Target = mut_set::MutSet<#ident #ty_generics, S>;
+                #[inline]
+                fn deref(&self) -> &Self::Target {
+                    &self.0
+                }
+            }
+            impl #hash_impl_generics DerefMut for #mut_set_ident #hash_ty_generics #where_clause {
+                #[inline]
+                fn deref_mut(&mut self) -> &mut Self::Target {
+                    &mut self.0
+                }
+            }
+            impl #hash_impl_generics From<mut_set::MutSet<#ident #ty_generics, S>> for #mut_set_ident #hash_ty_generics #where_clause {
+                #[inline]
+                fn from(value: mut_set::MutSet<#ident #ty_generics, S>) -> Self {
+                    Self(value)
+                }
+            }
+            impl #hash_impl_generics From<#mut_set_ident #hash_ty_generics> for mut_set::MutSet<#ident #ty_generics, S> #where_clause {
+                #[inline]
+                fn from(value: #mut_set_ident #hash_ty_generics) -> Self {
+                    value.0
+                }
+            }
+            impl #hash_impl_generics IntoIterator for #mut_set_ident #hash_ty_generics #where_clause {
+                type Item = #ident #ty_generics;
+
+                type IntoIter = std::collections::hash_map::IntoValues<u64, #ident #ty_generics>;
+                #[inline]
+                fn into_iter(self) -> Self::IntoIter {
+                    self.0.into_iter()
+                }
+            }
+            impl #life_hash_impl_generics IntoIterator for &'a #mut_set_ident #hash_ty_generics #where_clause {
+                type Item = &'a #ident #ty_generics;
+                type IntoIter = std::collections::hash_map::Values<'a, u64, #ident #ty_generics>;
+                #[inline]
+                fn into_iter(self) -> Self::IntoIter {
+                    (&self.0).into_iter()
+                }
+            }
+            impl #life_hash_impl_generics IntoIterator for &'a mut #mut_set_ident #hash_ty_generics #where_clause {
+                type Item = &'a mut #readonly_ident #ty_generics;
+                type IntoIter = mut_set::ValuesMut<'a, #ident #ty_generics>;
+                #[inline]
+                fn into_iter(self) -> Self::IntoIter {
+                    (&mut self.0).into_iter()
+                }
+            }
             impl #impl_generics mut_set::Item for #ident #ty_generics #where_clause {
                 type Id = #id_hash_ident;
                 type ImmutIdItem = #readonly_ident #ty_generics;
+                type MutSet<S: BuildHasher + Default> = #mut_set_ident #hash_ty_generics;
+
                 #[inline]
                 fn id<S: BuildHasher>(&self, __set: &mut_set::MutSet<Self, S>) -> Self::Id {
                     let mut state = __set.hasher().build_hasher();
@@ -482,62 +578,17 @@ fn vis_sup() {
     cmp(parse_quote!(pub(in crate::mod_a)), parse_quote!(pub(in crate::mod_a)));
 }
 
-fn parser_args(args: TokenStream) -> Result<(bool, HashSet<String>, HashSet<String>)> {
+fn parser_args(args: TokenStream) -> Result<bool> {
     let call_site = proc_macro2::Span::call_site();
     let mut sort = false;
-    let mut macro_set = HashSet::new();
-    let mut attri_set = HashSet::new();
-
-    fn process_one(
-        i: &mut proc_macro2::token_stream::IntoIter,
-        t: &str,
-        set: &mut HashSet<String>,
-    ) -> syn::Result<()> {
-        let call_site = Span::call_site();
-        if let Some(arg) = i.next() {
-            let s = arg.to_string();
-            let mut chars = s.chars();
-            if let Some('(') = chars.next() {
-            } else {
-                return Err(Error::new(
-                    call_site,
-                    format!("`{t}` should be surrounded by paren `(` and `)`"),
-                ));
-            }
-            if let Some(')') = chars.next_back() {
-            } else {
-                return Err(Error::new(
-                    call_site,
-                    format!("`{t}` should be surrounded by paren `(` and `)`"),
-                ));
-            }
-            for term in chars.as_str().to_string().replace(" ", "").split(';') {
-                if !term.is_empty() {
-                    set.insert(term.to_owned());
-                }
-            }
-            Ok(())
-        } else {
-            Err(Error::new(call_site, format!("Need terms after `{t}`")))
-        }
-    }
     let mut i = args.into_iter();
     if let Some(arg) = i.next() {
         match arg.to_string().as_str() {
             "sort" => sort = true,
-            "macro" => {
-                process_one(&mut i, "macro", &mut macro_set)?;
-            }
-            "attr_filter" => {
-                process_one(&mut i, "attri", &mut attri_set)?;
-            }
             _ => {
                 return Err(Error::new(
                     call_site,
-                    format!(
-                    "macro arguments only support `macro` and `attr_filter`, find `{}`",
-                    arg
-                ),
+                    format!("macro arguments only support `sort`, find `{}`", arg),
                 ))
             }
         }
@@ -548,62 +599,13 @@ fn parser_args(args: TokenStream) -> Result<(bool, HashSet<String>, HashSet<Stri
             _ => return Err(Error::new(call_site, format!("want `,` find `{}`", arg))),
         }
     }
-    if let Some(arg) = i.next() {
-        match arg.to_string().as_str() {
-            "sort" => sort = true,
-            "macro" => {
-                process_one(&mut i, "macro", &mut macro_set)?;
-            }
-            "attr_filter" => {
-                process_one(&mut i, "attr_filter", &mut attri_set)?;
-            }
-            _ => {
-                return Err(Error::new(
-                    call_site,
-                    format!(
-                    "macro arguments only support `macro` and `attr_filter`, find `{}`",
-                    arg
-                ),
-                ))
-            }
-        }
-    }
-    if let Some(arg) = i.next() {
-        match arg.to_string().as_str() {
-            "," => (),
-            _ => return Err(Error::new(call_site, format!("want `,` find `{}`", arg))),
-        }
-    }
-    if let Some(arg) = i.next() {
-        match arg.to_string().as_str() {
-            "sort" => sort = true,
-            "macro" => {
-                process_one(&mut i, "macro", &mut macro_set)?;
-            }
-            "attr_filter" => {
-                process_one(&mut i, "attr_filter", &mut attri_set)?;
-            }
-            _ => {
-                return Err(Error::new(
-                    call_site,
-                    format!(
-                    "macro arguments only support `macro` and `attr_filter`, find `{}`",
-                    arg
-                ),
-                ))
-            }
-        }
-    }
-    if let Some(arg) = i.next() {
-        return Err(Error::new(call_site, format!("want nothing, find `{}`", arg)));
-    }
-    Ok((sort, macro_set, attri_set))
+    Ok(sort)
 }
 #[test]
 fn size_type_test() {
     // let attr: Attribute = parse_quote!(#[id]);
     // let attr: Attribute = parse_quote!(#[id(borrow="&[ArcStr]")] );
-    let attr: Attribute = parse_quote!(#[size = 2]);
+    let attr: syn::Attribute = parse_quote!(#[size = 2]);
     if attr.path().is_ident("size") {
         match &attr.meta {
             syn::Meta::List(_) | syn::Meta::Path(_) => {
@@ -628,8 +630,8 @@ fn size_type_test() {
 fn borrow_type_test() {
     // let attr: Attribute = parse_quote!(#[id]);
     // let attr: Attribute = parse_quote!(#[id(borrow="&[ArcStr]")] );
-    let attr: Attribute = parse_quote!(#[id(borrow="&str")]);
-    // let attr: Attribute = parse_quote!(#[id(borrow = "Option<&str>", check_fn = "mut_set::check_fn::borrow_option")]);
+    // let attr: syn::Attribute = parse_quote!(#[id(borrow="&str")]);
+    let attr: syn::Attribute = parse_quote!(#[id(borrow = "Option<&str>", check_fn = "mut_set::check_fn::borrow_option")]);
     if attr.path().is_ident("id") {
         let borrow_type = match attr.meta {
             syn::Meta::Path(_) => BorrowType::default(),
@@ -642,7 +644,7 @@ fn borrow_type_test() {
             },
             syn::Meta::NameValue(_) => todo!(),
         };
-        println!("{:?}", borrow_type.borrow_type);
+        println!("{:?}", borrow_type.borrow_type.unwrap().to_string());
     }
 }
 
@@ -675,6 +677,12 @@ impl syn::parse::Parse for BorrowType {
         }
         Ok(Self { borrow_type, check_fn })
     }
+}
+#[test]
+fn parser_args_test1() {
+    let mut hash_impl_generics: syn::Generics = parse_quote!(<T1,T2>);
+    hash_impl_generics.params.insert(0, parse_quote!(S: BuildHasher));
+    dbg!(hash_impl_generics.to_token_stream().to_string());
 }
 #[test]
 fn parser_args_test() {

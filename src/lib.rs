@@ -65,7 +65,8 @@ pub mod derive {
     pub use mut_set_derive::Dummy;
 }
 use core::{borrow::Borrow, hash::BuildHasher, ops::Deref};
-use std::{collections::HashMap, hash::RandomState};
+pub use impl_set::ValuesMut;
+use std::{collections::HashMap, hash::RandomState, ops::DerefMut};
 
 /// See more at [![github](https://img.shields.io/badge/github-main-blue?logo=github)](https://github.com/zao111222333/mut_set)
 /// ```
@@ -139,6 +140,10 @@ where
 {
     type Id: Borrow<u64>;
     type ImmutIdItem: Deref<Target = Self>;
+    type MutSet<S: BuildHasher + Default>: Deref<Target = MutSet<Self, S>>
+        + DerefMut
+        + From<MutSet<Self, S>>
+        + Into<MutSet<Self, S>>;
     fn id<S: BuildHasher>(&self, __set: &MutSet<Self, S>) -> Self::Id;
 }
 

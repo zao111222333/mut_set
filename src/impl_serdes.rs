@@ -17,7 +17,6 @@ where
         SeqDeserializer::new(self.into_iter())
     }
 }
-// use serde::ser::SerializeSeq;
 impl<T, S> Serialize for MutSet<T, S>
 where
     T: Serialize + Item,
@@ -25,13 +24,6 @@ where
 {
     #[inline]
     fn serialize<SS: Serializer>(&self, serializer: SS) -> Result<SS::Ok, SS::Error> {
-        // let mut seq = serializer.serialize_seq(Some(self.len()))?;
-        // for (_, v) in self.inner.iter() {
-        //     seq.serialize_element(
-        //         <<T as Item>::ImmutIdItem as core::ops::Deref>::deref(&v),
-        //     )?;
-        // }
-        // seq.end()
         let v: Vec<&T> = self.iter().collect();
         v.serialize(serializer)
     }

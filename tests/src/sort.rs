@@ -1,15 +1,10 @@
 extern crate mut_set;
-// cargo expand --manifest-path ./tests/Cargo.toml derive
+// cargo expand --manifest-path ./tests/Cargo.toml sort
 
 #[derive(Debug, derivative::Derivative, Clone)]
+#[derive(serde::Serialize, serde::Deserialize)]
 #[derivative(Default)]
-#[mut_set::derive::item(
-    sort,
-    macro(derive(Debug, Clone);
-          derive(derivative::Derivative);
-          derivative(Default);),
-    attr_filter(derivative;)
-    )]
+#[mut_set::derive::item(sort)]
 pub(super) struct MyItem<T1, T2>
 where
     T1: Sized,
@@ -58,7 +53,7 @@ fn test() {
         // v.id1 = 0;
     }
     println!("{:?}", set);
-    println!("{:?}", set.get(&MyItem::new_id(&set, &2, "www", &())));
+    println!("{:?}", set.id_get(&MyItem::new_id(&set, &2, "www", &())));
     let new_item = MyItem {
         id1: 1,
         id2: "ww".to_string(),
@@ -66,9 +61,9 @@ fn test() {
         ctx2: "cccc".to_string(),
         id3: (),
     };
-    assert_eq!(set.get(&MyItem::new_id(&set, &1, "ww", &())), Some(&old_iterm));
+    assert_eq!(set.id_get(&MyItem::new_id(&set, &1, "ww", &())), Some(&old_iterm));
     assert_eq!(set.replace(new_item.clone()), Some(old_iterm));
-    assert_eq!(set.get(&mut_set::Item::id(&new_item, &set)), Some(&new_item));
+    assert_eq!(set.id_get(&mut_set::Item::id(&new_item, &set)), Some(&new_item));
     println!("{:?}", set);
     for v in set.into_iter_sort() {
         println!("{:?}", v);

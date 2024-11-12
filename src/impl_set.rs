@@ -9,17 +9,13 @@ use std::{
     },
     hash::RandomState,
 };
-impl<T, Q> Clone for MutSet<T>
-where
-    T: Item<ImmutIdItem = Q> + Clone,
-    Q: Clone,
-{
+impl<T: Item + Clone, S: BuildHasher + Clone> Clone for MutSet<T, S> {
     fn clone(&self) -> Self {
         Self { inner: self.inner.clone() }
     }
 }
 
-impl<T: Item + std::fmt::Debug> std::fmt::Debug for MutSet<T> {
+impl<T: Item + std::fmt::Debug, S: BuildHasher> std::fmt::Debug for MutSet<T, S> {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_set().entries(self.iter()).finish()
@@ -207,15 +203,15 @@ where
         self.inner.shrink_to(min_capacity)
     }
     #[inline]
-    pub fn contains(&self, id: &T::Id) -> bool {
+    pub fn id_contains(&self, id: &T::Id) -> bool {
         self.inner.contains_key(id.borrow())
     }
     #[inline]
-    pub fn get(&self, id: &T::Id) -> Option<&T> {
+    pub fn id_get(&self, id: &T::Id) -> Option<&T> {
         self.inner.get(id.borrow())
     }
     #[inline]
-    pub fn get_mut(&mut self, id: &T::Id) -> Option<&mut <T as Item>::ImmutIdItem> {
+    pub fn id_get_mut(&mut self, id: &T::Id) -> Option<&mut <T as Item>::ImmutIdItem> {
         self.inner.get_mut(id.borrow()).map(MutSetDeref::mut_set_deref)
     }
 
@@ -451,11 +447,11 @@ where
     }
 
     #[inline]
-    pub fn remove(&mut self, id: &T::Id) -> bool {
+    pub fn id_remove(&mut self, id: &T::Id) -> bool {
         self.inner.remove(id.borrow()).is_some()
     }
     #[inline]
-    pub fn take(&mut self, id: &T::Id) -> Option<T> {
+    pub fn id_take(&mut self, id: &T::Id) -> Option<T> {
         self.inner.remove(id.borrow())
     }
 }
@@ -487,7 +483,20 @@ where
     }
 }
 
-type ValuesMut<'a, T> = Map<
+impl<'a, T, S> IntoIterator for &'a mut MutSet<T, S>
+where
+    T: Item,
+    S: BuildHasher,
+{
+    type Item = &'a mut <T as MutSetDeref>::Target;
+    type IntoIter = ValuesMut<'a, T>;
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        self.inner.values_mut().map(MutSetDeref::mut_set_deref)
+    }
+}
+
+pub type ValuesMut<'a, T> = Map<
     std::collections::hash_map::ValuesMut<'a, u64, T>,
     fn(&mut T) -> &mut <T as MutSetDeref>::Target,
 >;
@@ -498,7 +507,7 @@ where
 {
     #[inline]
     pub fn iter_mut(&mut self) -> ValuesMut<'_, T> {
-        self.inner.values_mut().map(MutSetDeref::mut_set_deref)
+        self.into_iter()
     }
     /// Returns the number of elements the set can hold without reallocating.
     ///
@@ -537,7 +546,7 @@ where
     /// instead of O(len) because it internally visits empty buckets too.
     #[inline]
     pub fn iter(&self) -> Values<'_, u64, T> {
-        self.inner.values()
+        self.into_iter()
     }
 
     /// Returns the number of elements in the set.

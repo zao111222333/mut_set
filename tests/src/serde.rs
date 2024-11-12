@@ -1,7 +1,7 @@
 // cargo expand --manifest-path ./tests/Cargo.toml serde
 
 #[derive(serde::Serialize, serde::Deserialize)]
-#[derive(Debug, derivative::Derivative, Eq, PartialEq)]
+#[derive(Clone, Debug, derivative::Derivative, Eq, PartialEq)]
 #[derivative(Default)]
 #[mut_set::derive::item]
 pub(super) struct MyItem<T1, T2>

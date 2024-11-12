@@ -2,6 +2,7 @@
 
 #[cfg(not(doc))]
 #[derive(Debug, derivative::Derivative)]
+#[derive(Clone)]
 #[derivative(Default)]
 #[repr(C)]
 pub(super) struct MyItem<T1, T2>
@@ -20,18 +21,16 @@ mod __my_item {
     use super::*;
     use std::{
         borrow::Borrow,
+        fmt::Debug,
         hash::{BuildHasher, Hash, Hasher},
-        ops::Deref,
+        ops::{Deref, DerefMut},
     };
     #[doc(hidden)]
-    #[derive(Debug, derivative::Derivative)]
-    #[derivative(Default)]
     #[repr(C)]
     pub(in super::super) struct ImmutIdMyItem<T1, T2>
     where
         T1: Sized,
     {
-        #[derivative(Default(value = "8"))]
         id1: usize,
         id2: String,
         id3: (),
@@ -108,12 +107,105 @@ mod __my_item {
             &self.0
         }
     }
+    pub(in super::super) struct MutSetMyItem<S: BuildHasher, T1, T2>(
+        mut_set::MutSet<MyItem<T1, T2>, S>,
+    );
+
+    impl<S: BuildHasher, T1, T2> MutSetMyItem<S, T1, T2> {
+        #[inline]
+        pub(in super::super) fn contains(
+            &self,
+            id1: &usize,
+            id2: &str,
+            id3: &(),
+        ) -> bool {
+            let id = MyItem::new_id(&self, id1, id2, id3);
+            self.id_contains(&id)
+        }
+        #[inline]
+        pub(in super::super) fn get(
+            &self,
+            id1: &usize,
+            id2: &str,
+            id3: &(),
+        ) -> Option<&MyItem<T1, T2>> {
+            let id = MyItem::new_id(&self, id1, id2, id3);
+            self.id_get(&id)
+        }
+        #[inline]
+        pub(in super::super) fn get_mut(
+            &mut self,
+            id1: &usize,
+            id2: &str,
+            id3: &(),
+        ) -> Option<&mut ImmutIdMyItem<T1, T2>> {
+            let id = MyItem::new_id(&self, id1, id2, id3);
+            self.id_get_mut(&id)
+        }
+        #[inline]
+        pub(in super::super) fn remove(
+            &mut self,
+            id1: &usize,
+            id2: &str,
+            id3: &(),
+        ) -> bool {
+            let id = MyItem::new_id(&self, id1, id2, id3);
+            self.id_remove(&id)
+        }
+        #[inline]
+        pub(in super::super) fn take(
+            &mut self,
+            id1: &usize,
+            id2: &str,
+            id3: &(),
+        ) -> Option<MyItem<T1, T2>> {
+            let id = MyItem::new_id(&self, id1, id2, id3);
+            self.id_take(&id)
+        }
+    }
+    impl<S: BuildHasher, T1, T2> Deref for MutSetMyItem<S, T1, T2> {
+        type Target = mut_set::MutSet<MyItem<T1, T2>, S>;
+        #[inline]
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
+    impl<S: BuildHasher, T1, T2> DerefMut for MutSetMyItem<S, T1, T2> {
+        #[inline]
+        fn deref_mut(&mut self) -> &mut Self::Target {
+            &mut self.0
+        }
+    }
+    impl<S: BuildHasher, T1, T2> From<mut_set::MutSet<MyItem<T1, T2>, S>>
+        for MutSetMyItem<S, T1, T2>
+    {
+        #[inline]
+        fn from(value: mut_set::MutSet<MyItem<T1, T2>, S>) -> Self {
+            Self(value)
+        }
+    }
+    impl<S: BuildHasher, T1, T2> From<MutSetMyItem<S, T1, T2>>
+        for mut_set::MutSet<MyItem<T1, T2>, S>
+    {
+        #[inline]
+        fn from(value: MutSetMyItem<S, T1, T2>) -> Self {
+            value.0
+        }
+    }
+    impl<S: BuildHasher, T1: Debug, T2: Debug> Debug for MutSetMyItem<S, T1, T2> {
+        #[inline]
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            std::fmt::Debug::fmt(&self.0, f)
+        }
+    }
     impl<T1, T2> mut_set::Item for MyItem<T1, T2>
     where
         T1: Sized,
     {
         type Id = MyItemId;
         type ImmutIdItem = ImmutIdMyItem<T1, T2>;
+        type MutSet<S: BuildHasher + Default> = MutSetMyItem<S, T1, T2>;
+
         #[inline]
         fn id<S: BuildHasher>(&self, __set: &mut_set::MutSet<Self, S>) -> Self::Id {
             let mut state = __set.hasher().build_hasher();

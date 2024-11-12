@@ -1,15 +1,15 @@
 // cargo expand --manifest-path ./tests/Cargo.toml basic
 
-#[derive(Debug, derivative::Derivative)]
-#[derivative(Default)]
+#[derive(Debug, Default, Clone)]
+#[derive(serde::Serialize, serde::Deserialize)]
 #[mut_set::derive::item]
 pub(super) struct MyItem<T1, T2>
 where
-    T1: Sized,
+    T1: Sized + serde::Serialize + for<'de> serde::Deserialize<'de>,
+    T2: Sized + serde::Serialize + for<'de> serde::Deserialize<'de>,
 {
     #[id]
     #[size = 8]
-    #[derivative(Default(value = "3"))]
     pub(self) id1: usize,
     pub(crate) ctx1: T1,
     pub(super) ctx2: T2,
@@ -23,8 +23,12 @@ where
 
 #[test]
 fn test() {
-    let mut set = mut_set::MutSet::new();
-    // println!("{:?}", set);
+    use mut_set::Item;
+    use std::ops::Deref;
+
+    let mut set = <MyItem<i32, String> as Item>::MutSet::<std::hash::RandomState>::from(
+        mut_set::MutSet::new(),
+    );
     set.insert(MyItem {
         id1: 2,
         id2: "www".to_string(),
@@ -49,8 +53,8 @@ fn test() {
         // In `iter_mut` IDs write will be prohibited
         // v.id1 = 0;
     }
-    println!("{:?}", set);
-    println!("{:?}", set.get(&MyItem::new_id(&set, &2, "www", &None)));
+    println!("{:?}", set.deref());
+    println!("{:?}", set.get(&2, "www", &None));
     set.replace(MyItem {
         id1: 1,
         id2: "ww".to_string(),
@@ -62,7 +66,7 @@ fn test() {
     // let b: Option<&str> = a.as_ref().map(|s| s.borrow());
     // let s = "".to_string();
     // let b: &str = s.borrow();
-    println!("{:?}", set);
+    println!("{:?}", set.deref());
     for v in set.into_iter() {
         println!("{:?}", v);
     }
