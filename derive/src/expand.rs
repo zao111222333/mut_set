@@ -1,7 +1,6 @@
-use itertools::Itertools;
 use proc_macro2::{Span, TokenStream, TokenTree};
 use quote::{quote, ToTokens};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use syn::parse::Parse;
 use syn::spanned::Spanned;
 use syn::visit_mut::{self, VisitMut};
@@ -29,18 +28,11 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
     let mut input = input;
 
     let mut attr_errors = Vec::new();
-    let (id_idx, sizes) = find_and_strip_readonly_attrs(&mut input, &mut attr_errors);
-
-    let original_input = quote! {
-        #[cfg(doc)]
-        #input
-    };
+    let id_idx_field_type = rearange_layout_find_id(&mut input, &mut attr_errors);
+    input.attrs.push(parse_quote!(#[derive(mut_set::derive::Dummy)]));
     let mut readonly = input.clone();
-    // let mut id = input.clone();
     readonly.attrs.clear();
-    // id.attrs.clear();
     readonly.attrs.push(parse_quote!(#[doc(hidden)]));
-    // id.attrs.push(parse_quote!(#[doc(hidden)]));
     let (sort, macro_set, attri_set) = parser_args(args)?;
     let attr_filter_fn = |v: &Vec<Attribute>| -> Vec<Attribute> {
         let mut _v = vec![];
@@ -70,30 +62,26 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
     }
     readonly.vis = to_super(&input.vis);
     let readonly_vis = readonly.vis.clone();
-    let input_fields = fields_of_input(&mut input);
     let readonly_fields = fields_of_input(&mut readonly);
     let mut id_func_input = quote!();
     let mut id_hash_func_input = quote!();
     let mut borrow_check = quote!();
     let mut hash_impl = quote!();
     let mut id_hash_impl = quote!();
-    // let mut into_fields = quote!();
     let mut partial_cmp = quote!();
     let mut partial_eq = quote!();
-    if id_idx.is_empty() {
+    if id_idx_field_type.is_empty() {
         return Err(Error::new(call_site, "at least specify one `#[id]`"));
     }
     for (i, f) in readonly_fields.iter_mut().enumerate() {
         f.attrs = attr_filter_fn(&f.attrs);
-        if id_idx.iter().any(|(idx, _, _)| idx == &i) {
+        if id_idx_field_type.iter().any(|(idx, _, _)| idx == &i) {
             f.vis = Visibility::Inherited;
         } else {
             f.vis = to_super(&f.vis);
         }
     }
-
-    rearrange_fields(input_fields, &sizes);
-    for (_, f, borrow_type) in id_idx.iter() {
+    for (_, f, borrow_type) in id_idx_field_type.iter() {
         let t = f.ty.clone();
         let i = f.ident.clone();
         hash_impl = quote! {
@@ -131,21 +119,19 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
         } else {
             id_hash_func_input = quote! {#i: &#t, #id_hash_func_input};
         }
-        // id_func_fields = quote! {&self.#i, #id_func_fields};
-        // into_fields = quote! {#i:value.#i, #into_fields};
     }
     if sort {
-        let i = id_idx[0].1.ident.clone();
+        let i = id_idx_field_type[0].1.ident.clone();
         partial_eq = quote! {#partial_eq
             self.#i == other.#i
         };
-        for (_, f, _) in id_idx.iter().skip(1) {
+        for (_, f, _) in id_idx_field_type.iter().skip(1) {
             let i = f.ident.clone();
             partial_eq = quote! {#partial_eq
                 && self.#i == other.#i
             };
         }
-        for (_, f, _) in id_idx.iter().skip(1) {
+        for (_, f, _) in id_idx_field_type.iter().skip(1) {
             let i = f.ident.clone();
             partial_cmp = quote! {
                 match self.#i.partial_cmp(&other.#i) {
@@ -155,18 +141,18 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
                 #partial_cmp
             };
         }
-        let i = id_idx[0].1.ident.clone();
+        let i = id_idx_field_type[0].1.ident.clone();
         partial_cmp = quote! {#partial_cmp
             self.#i.partial_cmp(&other.#i)
         };
     }
 
-    for (_, mut f, _) in id_idx.clone().into_iter().rev() {
+    for (_, mut f, _) in id_idx_field_type.clone().into_iter().rev() {
         f.attrs = attr_filter_fn(&f.attrs);
         f.vis = to_super(&f.vis);
     }
-
-    rearrange_fields(readonly_fields, &sizes);
+    // #[cfg(not(feature = "__dbg_disable_mem_layout"))]
+    // rearrange_fields(readonly_fields, &sizes);
     let ident = &input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
     let self_path: Path = parse_quote!(#ident #ty_generics);
@@ -211,13 +197,17 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
     };
     input.attrs.insert(0, parse_quote!(#[cfg(not(doc))]));
     Ok(quote! {
-        #original_input
-
         #input
         #[doc(hidden)]
+        #[expect(clippy::field_scoped_visibility_modifiers)]
         mod #mod_name{
+            #[expect(clippy::wildcard_imports)]
             use super::*;
-            use std::{borrow::Borrow, hash::{Hash,Hasher,BuildHasher}, ops::{Deref}};
+            use core::{
+                borrow::Borrow,
+                hash::{Hash,Hasher,BuildHasher},
+                ops::{Deref},
+            };
 
             #readonly
             #[allow(clippy::ref_option_ref)]
@@ -309,20 +299,16 @@ fn fields_of_input(input: &mut DeriveInput) -> &mut Punctuated {
     }
 }
 
-fn find_and_strip_readonly_attrs(
+fn rearange_layout_find_id(
     input: &mut DeriveInput,
     errors: &mut Vec<Error>,
-) -> (Vec<(usize, Field, BorrowType)>, Vec<Option<usize>>) {
-    let mut id_idx = Vec::new();
-    let mut sizes = Vec::new();
-
-    for (i, field) in fields_of_input(input).iter_mut().enumerate() {
-        let mut borrow_type = None;
-        let mut size = None;
-        let mut j1j2 = [None, None];
-        for (j, attr) in field.attrs.iter().enumerate() {
+) -> Vec<(usize, Field, BorrowType)> {
+    let fields = fields_of_input(input);
+    let mut id_idx_field_type = Vec::new();
+    for (i, field) in fields.iter_mut().enumerate() {
+        'L: for (j, attr) in field.attrs.iter().enumerate() {
             if attr.path().is_ident("id") {
-                borrow_type = Some(match attr.meta {
+                let borrow_type = match attr.meta {
                     syn::Meta::Path(_) => BorrowType::default(),
                     syn::Meta::List(_) => match attr.parse_args_with(BorrowType::parse) {
                         Ok(t) => t,
@@ -332,48 +318,88 @@ fn find_and_strip_readonly_attrs(
                         }
                     },
                     syn::Meta::NameValue(_) => todo!(),
-                });
-                j1j2[0] = Some(j);
-            }
-            if attr.path().is_ident("size") {
-                match &attr.meta {
-                    syn::Meta::List(_) | syn::Meta::Path(_) => errors
-                        .push(Error::new(attr.meta.span(), "expected #[size = 123 ]")),
-                    syn::Meta::NameValue(s) => 'm: {
-                        if let syn::Expr::Lit(expr_lit) = &s.value {
-                            if let syn::Lit::Int(lit_int) = &expr_lit.lit {
-                                match lit_int.base10_parse::<usize>() {
-                                    Ok(n) => size = Some(n),
-                                    Err(e) => errors.push(e),
-                                }
-                                break 'm;
-                            }
-                        }
-                        errors.push(syn::Error::new(
-                            attr.meta.span(),
-                            "Expected integer literal",
-                        ))
-                    }
                 };
-                j1j2[1] = Some(j);
+                field.attrs.remove(j);
+                id_idx_field_type.push((i, field.clone(), borrow_type));
+                break 'L;
             }
-        }
-        match j1j2 {
-            [None, None] => {}
-            [None, Some(j2)] => _ = field.attrs.remove(j2),
-            [Some(j1), None] => _ = field.attrs.remove(j1),
-            [Some(j1), Some(j2)] => {
-                _ = field.attrs.remove(j1.max(j2));
-                _ = field.attrs.remove(j1.min(j2));
-            }
-        }
-        sizes.push(size);
-        if let Some(borrow_type) = borrow_type {
-            id_idx.push((i, field.clone(), borrow_type));
         }
     }
-    id_idx.reverse();
-    (id_idx, sizes)
+    let mut idx_map: HashMap<usize, usize>;
+    #[cfg(not(feature = "__dbg_disable_mem_layout"))]
+    {
+        let mut i_size_field_list: Vec<_> = std::mem::take(fields)
+            .into_iter()
+            .enumerate()
+            .map(|(i, mut field)| {
+                let mut size_j = None;
+                for (j, attr) in field.attrs.iter().enumerate() {
+                    if attr.path().is_ident("size") {
+                        match &attr.meta {
+                            syn::Meta::List(_) | syn::Meta::Path(_) => errors.push(
+                                Error::new(attr.meta.span(), "expected #[size = 123 ]"),
+                            ),
+                            syn::Meta::NameValue(s) => 'm: {
+                                if let syn::Expr::Lit(expr_lit) = &s.value {
+                                    if let syn::Lit::Int(lit_int) = &expr_lit.lit {
+                                        match lit_int.base10_parse::<usize>() {
+                                            Ok(n) => size_j = Some((n, j)),
+                                            Err(e) => errors.push(e),
+                                        }
+                                        break 'm;
+                                    }
+                                }
+                                errors.push(syn::Error::new(
+                                    attr.meta.span(),
+                                    "Expected integer literal",
+                                ))
+                            }
+                        };
+                    }
+                }
+                (
+                    i,
+                    size_j.map(|(size, j)| {
+                        field.attrs.remove(j);
+                        size
+                    }),
+                    field,
+                )
+            })
+            .collect();
+        i_size_field_list.sort_by(|(_, a, _), (_, b, _)| match (a, b) {
+            (None, None) => std::cmp::Ordering::Equal,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (Some(a), Some(b)) => b.cmp(a),
+        });
+        idx_map = i_size_field_list
+            .iter()
+            .enumerate()
+            .map(|(new_idx, (old_idx, _, _))| (*old_idx, new_idx))
+            .collect();
+        fields.extend(i_size_field_list.into_iter().map(|(old_idx, _, mut f)| {
+            let lit = proc_macro2::Literal::u64_unsuffixed(old_idx as u64);
+            f.attrs.push(parse_quote!(#[old_pos = #lit]));
+            f
+        }));
+    }
+    id_idx_field_type = id_idx_field_type
+        .into_iter()
+        .map(|(idx, field, _type)| {
+            let i: usize;
+            cfg_if::cfg_if! {
+                if #[cfg(feature = "__dbg_disable_mem_layout")] {
+                    i = idx;
+                } else {
+                    i = idx_map.remove(&idx).unwrap();
+                }
+            };
+            (i, field, _type)
+        })
+        .collect();
+    id_idx_field_type.reverse();
+    id_idx_field_type
 }
 
 struct ReplaceSelf<'a> {
@@ -395,24 +421,6 @@ impl<'a> VisitMut for ReplaceSelf<'a> {
         } else {
             visit_mut::visit_path_mut(self, path);
         }
-    }
-}
-
-fn rearrange_fields(input_fields: &mut Punctuated, sizes: &[Option<usize>]) {
-    let mut fields: Vec<_> = input_fields
-        .iter()
-        .zip_eq(sizes)
-        .map(|(f, size)| (f.clone(), size))
-        .collect();
-    input_fields.clear();
-    fields.sort_by(|(_, a), (_, b)| match (a, b) {
-        (None, None) => std::cmp::Ordering::Equal,
-        (None, Some(_)) => std::cmp::Ordering::Greater,
-        (Some(_), None) => std::cmp::Ordering::Less,
-        (Some(a), Some(b)) => b.cmp(a),
-    });
-    for (f, _) in fields.into_iter() {
-        input_fields.push(f);
     }
 }
 
@@ -604,7 +612,7 @@ fn size_type_test() {
             syn::Meta::NameValue(s) => {
                 if let syn::Expr::Lit(expr_lit) = &s.value {
                     if let syn::Lit::Int(lit_int) = &expr_lit.lit {
-                        dbg!(lit_int.base10_parse::<usize>());
+                        _ = dbg!(lit_int.base10_parse::<usize>());
                     } else {
                         dbg!(syn::Error::new(
                             attr.meta.span(),

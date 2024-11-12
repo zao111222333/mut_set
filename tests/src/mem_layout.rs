@@ -1,4 +1,4 @@
-/// size = 80 (0x50), align = 0x8
+#[expect(dead_code)]
 struct RustLayout {
     id1: String,
     id2: String,
@@ -7,7 +7,6 @@ struct RustLayout {
     id5: bool,
 }
 
-/// size = 80 (0x50), align = 0x8
 #[mut_set::derive::item]
 struct WithLayout {
     #[id]
@@ -27,7 +26,6 @@ struct WithLayout {
     id5: bool,
 }
 
-/// size = 88 (0x58), align = 0x8
 #[mut_set::derive::item]
 struct WithoutLayout {
     #[id]
@@ -45,6 +43,16 @@ struct WithoutLayout {
 #[test]
 fn assert_size() {
     assert_eq!(80, std::mem::size_of::<RustLayout>());
-    assert_eq!(80, std::mem::size_of::<WithLayout>());
     assert_eq!(88, std::mem::size_of::<WithoutLayout>());
+    assert_eq!(88, std::mem::size_of::<__without_layout::ImmutIdWithoutLayout>());
+    let with_layout_size: usize;
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "__dbg_disable_mem_layout")] {
+            with_layout_size = 88;
+        } else {
+            with_layout_size = 80;
+        }
+    };
+    assert_eq!(with_layout_size, std::mem::size_of::<WithLayout>());
+    assert_eq!(with_layout_size, std::mem::size_of::<__with_layout::ImmutIdWithLayout>());
 }

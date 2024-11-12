@@ -11,7 +11,8 @@ repository.workspace = true
 documentation.workspace = true
 
 [workspace.package]
-version = "0.5.1"
+version = "0.5.2"
+rust-version = "1.82"
 edition = "2021"
 license = "MIT"
 authors = ["Junzhuo <zhou@junzhuo.site>"]
@@ -27,9 +28,13 @@ documentation = "https://docs.rs/mut_set"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [workspace]
-members = ["derive","tests"]
+members = ["derive", "tests"]
+
+[features]
+default = []
+__dbg_disable_mem_layout = ["mut_set_derive/__dbg_disable_mem_layout"]
 
 [dependencies]
 serde = { version = "1.0" }
 mut_set_derive = { path = "derive" }
-# mut_set_derive = "0.5.1"
+# mut_set_derive = "0.5.2"

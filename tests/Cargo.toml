@@ -1,9 +1,15 @@
 [package]
 name = "tests"
+edition = "2021"
+
+[features]
+default = []
+__dbg_disable_mem_layout = ["mut_set/__dbg_disable_mem_layout"]
 
 [dependencies]
 proc-macro-error = "1.0"
-mut_set = { path = ".."}
+mut_set = { path = ".." }
 derivative = "2.2.0"
 serde_json = "1.0.117"
 serde = { version = "1.0", features = ["derive"] }
+cfg-if = "1"

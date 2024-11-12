@@ -134,3 +134,8 @@ pub fn item(args: TokenStream, tokens: TokenStream) -> TokenStream {
         })
         .into()
 }
+
+#[proc_macro_derive(Dummy, attributes(old_pos, size, id))]
+pub fn dummy_derive(_item: TokenStream) -> TokenStream {
+    TokenStream::new()
+}

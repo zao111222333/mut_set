@@ -62,6 +62,7 @@ mod impl_set;
 mod impl_sort;
 pub mod derive {
     pub use mut_set_derive::item;
+    pub use mut_set_derive::Dummy;
 }
 use core::{borrow::Borrow, hash::BuildHasher, ops::Deref};
 use std::{collections::HashMap, hash::RandomState};
