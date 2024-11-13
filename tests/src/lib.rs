@@ -5,3 +5,4 @@ mod mem_layout;
 mod serde;
 mod sort;
 mod sort_expand;
+mod test;

@@ -6,7 +6,7 @@ struct RustLayout {
     id4: String,
     id5: bool,
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 #[derive(serde::Serialize, serde::Deserialize)]
 #[mut_set::derive::item]
 struct WithLayout {
@@ -27,7 +27,7 @@ struct WithLayout {
     id5: bool,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 #[derive(serde::Serialize, serde::Deserialize)]
 #[mut_set::derive::item]
 struct WithoutLayout {

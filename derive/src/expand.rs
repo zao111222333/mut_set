@@ -47,7 +47,9 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
     let readonly_vis = readonly.vis.clone();
     let readonly_fields = fields_of_input(&mut readonly);
     let mut id_func_input = quote!();
+    let mut id_borrow_input = quote!();
     let mut id_hash_func_input = quote!();
+    let mut id_input = quote!();
     let mut borrow_check = quote!();
     let mut hash_impl = quote!();
     let mut id_hash_impl = quote!();
@@ -76,15 +78,18 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
             #id_hash_impl
         };
         id_func_input = quote! {#i, #id_func_input};
+        id_input = quote!(#i: #t, #id_input);
         if let Some(borrow_t) = &borrow_type.borrow_type {
+            let fn_name =
+                Ident::new(&format!("check_fn_{}", i.to_token_stream()), call_site);
             borrow_check = if let Some(check_fn) = &borrow_type.check_fn {
                 quote! {
-                    fn #i(id: &#t) -> #borrow_t { #check_fn(id) }
+                    fn #fn_name(id: &#t) -> #borrow_t { #check_fn(id) }
                     #borrow_check
                 }
             } else {
                 quote! {
-                    fn #i(id: &#t) -> #borrow_t { id.borrow() }
+                    fn #fn_name(id: &#t) -> #borrow_t { id.borrow() }
                     #borrow_check
                 }
             };
@@ -95,8 +100,10 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
             } else {
                 quote! {#i: &#borrow_t, #id_hash_func_input}
             };
+            id_borrow_input = quote!(#fn_name(&#i), #id_borrow_input)
         } else {
             id_hash_func_input = quote! {#i: &#t, #id_hash_func_input};
+            id_borrow_input = quote!(&#i, #id_borrow_input)
         }
     }
     if sort {
@@ -197,13 +204,10 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
                 hash::{Hash,Hasher,BuildHasher},
                 ops::{Deref, DerefMut},
             };
-
+            #borrow_check
             #readonly
             #[allow(clippy::ref_option_ref)]
             impl #impl_generics #ident #ty_generics #where_clause {
-                const CHECK: () = {
-                    #borrow_check
-                };
                 #[inline]
                 #readonly_vis fn new_id<S: BuildHasher>(
                     __set: &mut_set::MutSet<#ident #ty_generics, S>,
@@ -222,8 +226,14 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
                     &self.0
                 }
             }
+            impl From<u64> for #id_hash_ident {
+                #[inline]
+                fn from(value: u64) -> Self {
+                    Self(value)
+                }
+            }
             #[derive(Debug, Clone, Default)]
-            #readonly_vis struct #mut_set_ident #hash_impl_generics(mut_set::MutSet<#ident #ty_generics, S>);
+            #readonly_vis struct #mut_set_ident #hash_impl_generics(mut_set::MutSet<#ident #ty_generics, S>) #where_clause;
             impl #hash_impl_generics #mut_set_ident #hash_ty_generics #where_clause {
                 #[inline]
                 #readonly_vis fn serialize_with<Se: serde::Serializer>(
@@ -245,36 +255,43 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
                 #readonly_vis fn contains(
                     &self, #id_hash_func_input
                 ) -> bool {
-                    let id = #ident::new_id(&self, #id_func_input);
-                    self.id_contains(&id)
+                    let __id = #ident::new_id(&self, #id_func_input);
+                    self.id_contains(&__id)
                 }
                 #[inline]
                 #readonly_vis fn get(
                     &self, #id_hash_func_input
                 ) -> Option<&#ident #ty_generics> {
-                    let id = #ident::new_id(&self, #id_func_input);
-                    self.id_get(&id)
+                    let __id = #ident::new_id(&self, #id_func_input);
+                    self.id_get(&__id)
                 }
                 #[inline]
                 #readonly_vis fn get_mut(
                     &mut self, #id_hash_func_input
                 ) -> Option<&mut #readonly_ident #ty_generics> {
-                    let id = #ident::new_id(&self, #id_func_input);
-                    self.id_get_mut(&id)
+                    let __id = #ident::new_id(&self, #id_func_input);
+                    self.id_get_mut(&__id)
                 }
                 #[inline]
                 #readonly_vis fn remove(
                     &mut self, #id_hash_func_input
                 ) -> bool {
-                    let id = #ident::new_id(&self, #id_func_input);
-                    self.id_remove(&id)
+                    let __id = #ident::new_id(&self, #id_func_input);
+                    self.id_remove(&__id)
                 }
                 #[inline]
-                pub(in super::super) fn take(
+                #readonly_vis fn take(
                     &mut self, #id_hash_func_input
                 ) -> Option<#ident #ty_generics> {
-                    let id = #ident::new_id(&self, #id_func_input);
-                    self.id_take(&id)
+                    let __id = #ident::new_id(&self, #id_func_input);
+                    self.id_take(&__id)
+                }
+                #[inline]
+                #readonly_vis fn entry(
+                    &mut self, #id_input
+                ) -> mut_set::Entry<'_, #ident #ty_generics, impl FnOnce() -> #ident #ty_generics > {
+                    let __id = #ident::new_id(&self, #id_borrow_input);
+                    self.id_entry(&__id, move || #ident { #id_func_input ..Default::default() })
                 }
             }
             impl #hash_impl_generics Deref for #mut_set_ident #hash_ty_generics #where_clause {
@@ -337,6 +354,34 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
                     let mut state = __set.hasher().build_hasher();
                     #hash_impl
                     #id_hash_ident(state.finish())
+                }
+            }
+            impl #impl_generics From<#ident #ty_generics> for #readonly_ident #ty_generics #where_clause
+            {
+                #[inline]
+                fn from(value: #ident #ty_generics) -> Self {
+                    use std::mem::ManuallyDrop;
+                    use std::ptr;
+                    unsafe {
+                        let this = ManuallyDrop::new(value);
+                        let ptr = &*this as *const #ident #ty_generics as *const #readonly_ident #ty_generics;
+                        ptr::read(ptr)
+                    }
+                    // unsafe { std::mem::transmute(value) }
+                }
+            }
+            impl #impl_generics From<#readonly_ident #ty_generics> for #ident #ty_generics #where_clause
+            {
+                #[inline]
+                fn from(value: #readonly_ident #ty_generics) -> Self {
+                    use std::mem::ManuallyDrop;
+                    use std::ptr;
+                    unsafe {
+                        let this = ManuallyDrop::new(value);
+                        let ptr = &*this as *const #readonly_ident #ty_generics as *const #ident #ty_generics;
+                        ptr::read(ptr)
+                    }
+                    // unsafe { std::mem::transmute(value) }
                 }
             }
             impl #impl_generics Deref for #readonly_ident #ty_generics #where_clause {

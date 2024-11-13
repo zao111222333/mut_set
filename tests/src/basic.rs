@@ -5,8 +5,8 @@
 #[mut_set::derive::item]
 pub(super) struct MyItem<T1, T2>
 where
-    T1: Sized + serde::Serialize + for<'de> serde::Deserialize<'de>,
-    T2: Sized + serde::Serialize + for<'de> serde::Deserialize<'de>,
+    T1: Sized + Default,
+    T2: Sized + Default,
 {
     #[id]
     #[size = 8]
@@ -54,7 +54,7 @@ fn test() {
         // v.id1 = 0;
     }
     println!("{:?}", set.deref());
-    println!("{:?}", set.get(&2, "www", &None));
+    println!("{:?}", set.get(&2, "www", None));
     set.replace(MyItem {
         id1: 1,
         id2: "ww".to_string(),

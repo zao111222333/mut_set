@@ -4,7 +4,7 @@ use super::{Item, MutSet};
 use core::{borrow::Borrow, hash::BuildHasher, iter::Map};
 use std::{
     collections::{
-        hash_map::{Entry, IntoValues, Values},
+        hash_map::{IntoValues, Values},
         HashMap, HashSet, TryReserveError,
     },
     hash::RandomState,
@@ -418,7 +418,9 @@ where
     /// ```
     #[inline]
     pub fn insert(&mut self, item: T) -> bool {
-        if let Entry::Vacant(e) = self.inner.entry(self.id(&item)) {
+        if let std::collections::hash_map::Entry::Vacant(e) =
+            self.inner.entry(self.id(&item))
+        {
             e.insert(item);
             true
         } else {
@@ -453,6 +455,21 @@ where
     #[inline]
     pub fn id_take(&mut self, id: &T::Id) -> Option<T> {
         self.inner.remove(id.borrow())
+    }
+    #[inline]
+    pub fn id_entry<DefaultF: FnOnce() -> T>(
+        &mut self,
+        id: &T::Id,
+        default_f: DefaultF,
+    ) -> crate::Entry<'_, T, DefaultF> {
+        match (&mut self.inner).entry(*id.borrow()) {
+            std::collections::hash_map::Entry::Occupied(inner) => {
+                crate::Entry::Occupied(crate::OccupiedEntry::new(inner))
+            }
+            std::collections::hash_map::Entry::Vacant(inner) => {
+                crate::Entry::Vacant(crate::VacantEntry::new(inner), default_f)
+            }
+        }
     }
 }
 

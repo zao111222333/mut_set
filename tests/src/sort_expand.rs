@@ -107,6 +107,12 @@ mod __my_item {
             &self.0
         }
     }
+    impl From<u64> for MyItemId {
+        #[inline]
+        fn from(value: u64) -> Self {
+            Self(value)
+        }
+    }
     pub(in super::super) struct MutSetMyItem<S: BuildHasher, T1, T2>(
         mut_set::MutSet<MyItem<T1, T2>, S>,
     );
@@ -223,6 +229,40 @@ mod __my_item {
         #[inline]
         fn deref(&self) -> &Self::Target {
             unsafe { &*(self as *const Self as *const Self::Target) }
+        }
+    }
+    impl<T1, T2> From<MyItem<T1, T2>> for ImmutIdMyItem<T1, T2>
+    where
+        T1: Sized,
+        T2: Sized,
+    {
+        #[inline]
+        fn from(value: MyItem<T1, T2>) -> Self {
+            use std::mem::ManuallyDrop;
+            use std::ptr;
+            unsafe {
+                let this = ManuallyDrop::new(value);
+                let ptr = &*this as *const MyItem<T1, T2> as *const ImmutIdMyItem<T1, T2>;
+                ptr::read(ptr)
+            }
+            // unsafe { std::mem::transmute(value) }
+        }
+    }
+    impl<T1, T2> From<ImmutIdMyItem<T1, T2>> for MyItem<T1, T2>
+    where
+        T1: Sized,
+        T2: Sized,
+    {
+        #[inline]
+        fn from(value: ImmutIdMyItem<T1, T2>) -> Self {
+            use std::mem::ManuallyDrop;
+            use std::ptr;
+            unsafe {
+                let this = ManuallyDrop::new(value);
+                let ptr = &*this as *const ImmutIdMyItem<T1, T2> as *const MyItem<T1, T2>;
+                ptr::read(ptr)
+            }
+            // unsafe { std::mem::transmute(value) }
         }
     }
     impl<T1, T2> mut_set::MutSetDeref for MyItem<T1, T2>

@@ -56,6 +56,7 @@
 //! ```
 pub mod check_fn;
 mod impl_difference;
+mod impl_entry;
 mod impl_eq;
 mod impl_serdes;
 mod impl_set;
@@ -65,9 +66,9 @@ pub mod derive {
     pub use mut_set_derive::Dummy;
 }
 use core::{borrow::Borrow, hash::BuildHasher, ops::Deref};
+pub use impl_entry::{Entry, OccupiedEntry, VacantEntry};
 pub use impl_set::ValuesMut;
 use std::{collections::HashMap, hash::RandomState, ops::DerefMut};
-
 /// See more at [![github](https://img.shields.io/badge/github-main-blue?logo=github)](https://github.com/zao111222333/mut_set)
 /// ```
 ///#[derive(Debug)]
@@ -125,6 +126,7 @@ use std::{collections::HashMap, hash::RandomState, ops::DerefMut};
 /// ```
 pub struct MutSet<T: Item, S: BuildHasher = RandomState> {
     inner: HashMap<u64, T, S>,
+    // sorted: bool,
 }
 
 impl<T: Item, S: BuildHasher> MutSet<T, S> {
@@ -138,8 +140,8 @@ pub trait Item
 where
     Self: Sized + MutSetDeref<Target = Self::ImmutIdItem>,
 {
-    type Id: Borrow<u64>;
-    type ImmutIdItem: Deref<Target = Self>;
+    type Id: Borrow<u64> + From<u64>;
+    type ImmutIdItem: Deref<Target = Self> + From<Self> + Into<Self>;
     type MutSet<S: BuildHasher + Default>: Deref<Target = MutSet<Self, S>>
         + DerefMut
         + From<MutSet<Self, S>>
