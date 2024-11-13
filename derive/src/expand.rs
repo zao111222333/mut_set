@@ -26,7 +26,11 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
     }
 
     let mut input = input;
-
+    let doc = quote! {
+        #[cfg(doc)]
+        #[derive(mut_set::derive::Dummy)]
+        #input
+    };
     let mut attr_errors = Vec::new();
     let id_idx_field_type = rearange_layout_find_id(&mut input, &mut attr_errors);
     input.attrs.push(parse_quote!(#[derive(mut_set::derive::Dummy)]));
@@ -193,6 +197,7 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
     };
     input.attrs.insert(0, parse_quote!(#[cfg(not(doc))]));
     Ok(quote! {
+        #doc
         #input
         #[doc(hidden)]
         #[expect(clippy::field_scoped_visibility_modifiers)]
