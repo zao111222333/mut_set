@@ -287,6 +287,7 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
                     self.id_take(&__id)
                 }
                 #[inline]
+                #[expect(clippy::needless_update)]
                 #readonly_vis fn entry(
                     &mut self, #id_input
                 ) -> mut_set::Entry<'_, #ident #ty_generics, impl FnOnce() -> #ident #ty_generics > {
