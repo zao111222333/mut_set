@@ -125,8 +125,38 @@ use std::{collections::HashMap, hash::RandomState, ops::DerefMut};
 ///}
 /// ```
 pub struct MutSet<T: Item, S: BuildHasher = RandomState> {
-    inner: HashMap<u64, T, S>,
-    // sorted: bool,
+    hasher: S,
+    inner: HashMap<u64, T, NoHashBuildHasher>,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoHashBuildHasher;
+impl NoHashBuildHasher {
+    pub const fn new() -> Self {
+        Self
+    }
+}
+impl BuildHasher for NoHashBuildHasher {
+    type Hasher = NoHashHasher;
+    #[inline]
+    fn build_hasher(&self) -> Self::Hasher {
+        NoHashHasher(0)
+    }
+}
+pub struct NoHashHasher(u64);
+impl core::hash::Hasher for NoHashHasher {
+    #[inline]
+    fn finish(&self) -> u64 {
+        self.0
+    }
+    #[inline]
+    fn write_u64(&mut self, i: u64) {
+        self.0 = i
+    }
+    #[inline]
+    fn write(&mut self, _bytes: &[u8]) {
+        unimplemented!()
+    }
 }
 
 impl<T: Item, S: BuildHasher> MutSet<T, S> {

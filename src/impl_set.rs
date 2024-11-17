@@ -11,7 +11,10 @@ use std::{
 };
 impl<T: Item + Clone, S: BuildHasher + Clone> Clone for MutSet<T, S> {
     fn clone(&self) -> Self {
-        Self { inner: self.inner.clone() }
+        Self {
+            inner: self.inner.clone(),
+            hasher: self.hasher.clone(),
+        }
     }
 }
 
@@ -24,19 +27,26 @@ impl<T: Item + std::fmt::Debug, S: BuildHasher> std::fmt::Debug for MutSet<T, S>
 
 impl<T: Item, S: Default + BuildHasher> Default for MutSet<T, S> {
     fn default() -> Self {
-        Self { inner: Default::default() }
+        Self {
+            inner: Default::default(),
+            hasher: Default::default(),
+        }
     }
 }
 
 impl<T: Item> MutSet<T, RandomState> {
     #[inline]
     pub fn new() -> Self {
-        Self { inner: HashMap::new() }
+        Self {
+            inner: HashMap::default(),
+            hasher: RandomState::new(),
+        }
     }
     #[inline]
     pub fn with_capacity(capacity: usize) -> MutSet<T, RandomState> {
         Self {
             inner: HashMap::with_capacity_and_hasher(capacity, Default::default()),
+            hasher: RandomState::new(),
         }
     }
 }
@@ -745,7 +755,7 @@ where
     // #[stable(feature = "hashmap_build_hasher", since = "1.7.0")]
     // #[rustc_const_unstable(feature = "const_collections_with_hasher", issue = "102575")]
     pub fn with_hasher(hasher: S) -> MutSet<T, S> {
-        MutSet { inner: HashMap::with_hasher(hasher) }
+        MutSet { inner: HashMap::default(), hasher }
     }
 
     /// Creates an empty `HashSet` with at least the specified capacity, using
@@ -776,7 +786,11 @@ where
     #[inline]
     pub fn with_capacity_and_hasher(capacity: usize, hasher: S) -> MutSet<T, S> {
         MutSet {
-            inner: HashMap::with_capacity_and_hasher(capacity, hasher),
+            inner: HashMap::with_capacity_and_hasher(
+                capacity,
+                crate::NoHashBuildHasher::new(),
+            ),
+            hasher,
         }
     }
 
@@ -793,7 +807,7 @@ where
     /// let hasher: &RandomState = set.hasher();
     /// ```
     #[inline]
-    pub fn hasher(&self) -> &S {
-        self.inner.hasher()
+    pub const fn hasher(&self) -> &S {
+        &self.hasher
     }
 }
