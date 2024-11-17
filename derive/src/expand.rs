@@ -350,6 +350,18 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
                     (&mut self.0).into_iter()
                 }
             }
+            impl #hash_impl_generics FromIterator<#ident #ty_generics> for #mut_set_ident #hash_ty_generics #where_clause {
+                #[inline]
+                fn from_iter<I: IntoIterator<Item = #ident #ty_generics>>(iter: I) -> Self {
+                    Self(mut_set::MutSet::from_iter(iter))
+                }
+            }
+            impl #hash_impl_generics Extend<#ident #ty_generics> for #mut_set_ident #hash_ty_generics #where_clause {
+                #[inline]
+                fn extend<I: IntoIterator<Item = #ident #ty_generics>>(&mut self, iter: I) {
+                    self.0.extend(iter);
+                }
+            }
             impl #impl_generics mut_set::Item for #ident #ty_generics #where_clause {
                 type Id = #id_hash_ident;
                 type ImmutIdItem = #readonly_ident #ty_generics;

@@ -11,7 +11,7 @@ repository.workspace = true
 documentation.workspace = true
 
 [workspace.package]
-version = "0.5.7"
+version = "0.5.8"
 rust-version = "1.82"
 edition = "2021"
 license = "MIT"
@@ -39,4 +39,4 @@ __dbg_disable_mem_layout = ["mut_set_derive/__dbg_disable_mem_layout"]
 [dependencies]
 serde = { version = "1.0" }
 # mut_set_derive = { path = "derive" }
-mut_set_derive = "0.5.7"
+mut_set_derive = "0.5.8"

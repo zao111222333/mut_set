@@ -309,4 +309,25 @@ mod __my_item {
             unsafe { &mut *(self as *mut Self as *mut Self::Target) }
         }
     }
+    impl<S: BuildHasher + Default, T1, T2> FromIterator<MyItem<T1, T2>>
+        for MutSetMyItem<S, T1, T2>
+    where
+        T1: Sized + Default,
+        T2: Sized + Default,
+    {
+        #[inline]
+        fn from_iter<I: IntoIterator<Item = MyItem<T1, T2>>>(iter: I) -> Self {
+            Self(mut_set::MutSet::from_iter(iter))
+        }
+    }
+    impl<S: BuildHasher + Default, T1, T2> Extend<MyItem<T1, T2>> for MutSetMyItem<S, T1, T2>
+    where
+        T1: Sized + Default,
+        T2: Sized + Default,
+    {
+        #[inline]
+        fn extend<I: IntoIterator<Item = MyItem<T1, T2>>>(&mut self, iter: I) {
+            self.0.extend(iter);
+        }
+    }
 }
