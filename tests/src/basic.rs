@@ -3,6 +3,7 @@
 #[derive(Debug, Default, Clone)]
 #[derive(serde::Serialize, serde::Deserialize)]
 #[mut_set::derive::item]
+#[serde(bound = "T1: serde::Serialize + serde::de::DeserializeOwned")]
 pub(super) struct MyItem<T1, T2>
 where
     T1: Sized + Default,
@@ -13,10 +14,14 @@ where
     pub(self) id1: usize,
     pub(crate) ctx1: T1,
     pub(super) ctx2: T2,
-    #[id(borrow = "&str")]
+    #[id(borrow = "&str", with_ref = false)]
     #[size = 24]
     pub id2: String,
-    #[id(borrow = "Option<&str>", check_fn = "mut_set::borrow_option!")]
+    #[id(
+        borrow = "Option<&str>",
+        check_fn = "mut_set::borrow_option!",
+        with_ref = false
+    )]
     #[size = 24]
     pub id3: Option<String>,
 }

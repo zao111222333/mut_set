@@ -88,21 +88,21 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
                 Ident::new(&format!("check_fn_{}", i.to_token_stream()), call_site);
             borrow_check = if let Some(check_fn) = &borrow_type.check_fn {
                 quote! {
+                    #[expect(clippy::ref_option)]
                     fn #fn_name(id: &#t) -> #borrow_t { #check_fn(id) }
                     #borrow_check
                 }
             } else {
                 quote! {
+                    #[expect(clippy::ref_option)]
                     fn #fn_name(id: &#t) -> #borrow_t { id.borrow() }
                     #borrow_check
                 }
             };
-            let leading_ref = borrow_t.to_string().starts_with("&")
-                || borrow_t.to_string().starts_with("Option <&");
-            id_hash_func_input = if leading_ref {
-                quote! {#i: #borrow_t, #id_hash_func_input}
-            } else {
+            id_hash_func_input = if borrow_type.with_ref {
                 quote! {#i: &#borrow_t, #id_hash_func_input}
+            } else {
+                quote! {#i: #borrow_t, #id_hash_func_input}
             };
             id_borrow_input = quote!(#fn_name(&#i), #id_borrow_input)
         } else {
@@ -211,7 +211,7 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
             };
             #borrow_check
             #readonly
-            #[allow(clippy::ref_option_ref)]
+            #[expect(clippy::ref_option)]
             impl #impl_generics #ident #ty_generics #where_clause {
                 #[inline]
                 #readonly_vis fn new_id<S: BuildHasher>(
@@ -715,11 +715,13 @@ fn borrow_type_test() {
 struct BorrowType {
     borrow_type: Option<TokenStream>,
     check_fn: Option<TokenStream>,
+    with_ref: bool,
 }
 
 impl syn::parse::Parse for BorrowType {
     fn parse(input: syn::parse::ParseStream) -> Result<Self> {
         let mut borrow_type = None;
+        let mut with_ref = true;
         let mut check_fn = None;
         while !input.is_empty() {
             let ident: syn::Ident = input.parse()?;
@@ -728,6 +730,10 @@ impl syn::parse::Parse for BorrowType {
             if ident == "borrow" {
                 if let Lit::Str(lit_str) = lit {
                     borrow_type = Some(parse_str(&lit_str.value())?);
+                }
+            } else if ident == "with_ref" {
+                if let Lit::Bool(lit_bool) = lit {
+                    with_ref = lit_bool.value();
                 }
             } else if ident == "check_fn" {
                 if let Lit::Str(lit_str) = lit {
@@ -738,7 +744,7 @@ impl syn::parse::Parse for BorrowType {
                 let _: Token![,] = input.parse()?;
             }
         }
-        Ok(Self { borrow_type, check_fn })
+        Ok(Self { borrow_type, check_fn, with_ref })
     }
 }
 #[test]
