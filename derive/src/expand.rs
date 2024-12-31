@@ -73,14 +73,30 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
     for (_, f, borrow_type) in id_idx_field_type.iter() {
         let t = f.ty.clone();
         let i = f.ident.clone();
-        hash_impl = quote! {
-            Hash::hash(&self.#i, &mut state);
-            #hash_impl
-        };
-        id_hash_impl = quote! {
-            Hash::hash(&#i, &mut state);
-            #id_hash_impl
-        };
+        (hash_impl, id_hash_impl) =
+            if let Some(into_hash_ord_fn) = &borrow_type.into_hash_ord_fn {
+                (
+                    quote! {
+                        Hash::hash(&#into_hash_ord_fn(&self.#i), &mut state);
+                        #hash_impl
+                    },
+                    quote! {
+                        Hash::hash(&#into_hash_ord_fn(&#i), &mut state);
+                        #id_hash_impl
+                    },
+                )
+            } else {
+                (
+                    quote! {
+                        Hash::hash(&self.#i, &mut state);
+                        #hash_impl
+                    },
+                    quote! {
+                        Hash::hash(&#i, &mut state);
+                        #id_hash_impl
+                    },
+                )
+            };
         id_func_input = quote! {#i, #id_func_input};
         id_input = quote!(#i: #t, #id_input);
         if let Some(borrow_t) = &borrow_type.borrow_type {
@@ -112,29 +128,59 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
     }
     if sort {
         let i = id_idx_field_type[0].1.ident.clone();
-        partial_eq = quote! {#partial_eq
-            self.#i == other.#i
-        };
-        for (_, f, _) in id_idx_field_type.iter().skip(1) {
-            let i = f.ident.clone();
-            partial_eq = quote! {#partial_eq
-                && self.#i == other.#i
-            };
-        }
-        for (_, f, _) in id_idx_field_type.iter().skip(1) {
-            let i = f.ident.clone();
-            partial_cmp = quote! {
-                match self.#i.partial_cmp(&other.#i) {
-                    Some(core::cmp::Ordering::Equal)|None => {}
-                    ord => return ord,
+        partial_eq =
+            if let Some(into_hash_ord_fn) = &id_idx_field_type[0].2.into_hash_ord_fn {
+                quote! {
+                    #into_hash_ord_fn(&self.#i) == #into_hash_ord_fn(&other.#i)
                 }
-                #partial_cmp
+            } else {
+                quote! {
+                    self.#i == other.#i
+                }
+            };
+        for (_, f, borrow_type) in id_idx_field_type.iter().skip(1) {
+            let i = f.ident.clone();
+            (partial_eq, partial_cmp) = if let Some(into_hash_ord_fn) =
+                &borrow_type.into_hash_ord_fn
+            {
+                (
+                    quote! {#partial_eq
+                        && #into_hash_ord_fn(&self.#i) == #into_hash_ord_fn(&other.#i)
+                    },
+                    quote! {
+                        match #into_hash_ord_fn(&self.#i).partial_cmp(&#into_hash_ord_fn(&other.#i)) {
+                            Some(core::cmp::Ordering::Equal)|None => {}
+                            ord => return ord,
+                        }
+                        #partial_cmp
+                    },
+                )
+            } else {
+                (
+                    quote! {#partial_eq
+                        && self.#i == other.#i
+                    },
+                    quote! {
+                        match self.#i.partial_cmp(&other.#i) {
+                            Some(core::cmp::Ordering::Equal)|None => {}
+                            ord => return ord,
+                        }
+                        #partial_cmp
+                    },
+                )
             };
         }
         let i = id_idx_field_type[0].1.ident.clone();
-        partial_cmp = quote! {#partial_cmp
-            self.#i.partial_cmp(&other.#i)
-        };
+        partial_cmp =
+            if let Some(into_hash_ord_fn) = &id_idx_field_type[0].2.into_hash_ord_fn {
+                quote! {#partial_cmp
+                    #into_hash_ord_fn(&self.#i).partial_cmp(&#into_hash_ord_fn(&other.#i))
+                }
+            } else {
+                quote! {#partial_cmp
+                    self.#i.partial_cmp(&other.#i)
+                }
+            };
     }
     let ident = &input.ident;
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
@@ -715,6 +761,7 @@ fn borrow_type_test() {
 struct BorrowType {
     borrow_type: Option<TokenStream>,
     check_fn: Option<TokenStream>,
+    into_hash_ord_fn: Option<TokenStream>,
     with_ref: bool,
 }
 
@@ -723,28 +770,39 @@ impl syn::parse::Parse for BorrowType {
         let mut borrow_type = None;
         let mut with_ref = true;
         let mut check_fn = None;
+        let mut into_hash_ord_fn = None;
         while !input.is_empty() {
             let ident: syn::Ident = input.parse()?;
             let _: Token![=] = input.parse()?;
             let lit: Lit = input.parse()?;
-            if ident == "borrow" {
-                if let Lit::Str(lit_str) = lit {
-                    borrow_type = Some(parse_str(&lit_str.value())?);
+            match ident.to_string().as_str() {
+                "borrow" => {
+                    if let Lit::Str(lit_str) = lit {
+                        borrow_type = Some(parse_str(&lit_str.value())?);
+                    }
                 }
-            } else if ident == "with_ref" {
-                if let Lit::Bool(lit_bool) = lit {
-                    with_ref = lit_bool.value();
+                "with_ref" => {
+                    if let Lit::Bool(lit_bool) = lit {
+                        with_ref = lit_bool.value();
+                    }
                 }
-            } else if ident == "check_fn" {
-                if let Lit::Str(lit_str) = lit {
-                    check_fn = Some(parse_str(&lit_str.value())?);
+                "check_fn" => {
+                    if let Lit::Str(lit_str) = lit {
+                        check_fn = Some(parse_str(&lit_str.value())?);
+                    }
                 }
+                "into_hash_ord_fn" => {
+                    if let Lit::Str(lit_str) = lit {
+                        into_hash_ord_fn = Some(parse_str(&lit_str.value())?);
+                    }
+                }
+                _ => {}
             }
             if input.peek(Token![,]) {
                 let _: Token![,] = input.parse()?;
             }
         }
-        Ok(Self { borrow_type, check_fn, with_ref })
+        Ok(Self { borrow_type, check_fn, into_hash_ord_fn, with_ref })
     }
 }
 #[test]
