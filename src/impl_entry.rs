@@ -7,16 +7,12 @@ pub enum Entry<'a, T: Item, DefaultF: FnOnce() -> T> {
     Vacant(VacantEntry<'a, T>, DefaultF),
 }
 
-pub struct OccupiedEntry<'a, T: Item>(
-    std::collections::hash_map::OccupiedEntry<'a, u64, T>,
-);
-pub struct VacantEntry<'a, T: Item>(std::collections::hash_map::VacantEntry<'a, u64, T>);
+pub struct OccupiedEntry<'a, T: Item>(indexmap::map::OccupiedEntry<'a, u64, T>);
+pub struct VacantEntry<'a, T: Item>(indexmap::map::VacantEntry<'a, u64, T>);
 
 impl<'a, T: 'a + Item> OccupiedEntry<'a, T> {
     #[inline]
-    pub(crate) fn new(
-        inner: std::collections::hash_map::OccupiedEntry<'a, u64, T>,
-    ) -> Self {
+    pub(crate) fn new(inner: indexmap::map::OccupiedEntry<'a, u64, T>) -> Self {
         Self(inner)
     }
     /// Gets a reference to the key in the entry.
@@ -41,7 +37,7 @@ impl<'a, T: 'a + Item> OccupiedEntry<'a, T> {
     ///
     /// ```
     /// use std::collections::HashMap;
-    /// use std::collections::hash_map::Entry;
+    /// use indexmap::map::Entry;
     ///
     /// let mut map: HashMap<&str, u32> = HashMap::new();
     /// map.entry("poneyland").or_insert(12);
@@ -55,7 +51,7 @@ impl<'a, T: 'a + Item> OccupiedEntry<'a, T> {
     /// ```
     #[inline]
     pub fn remove_entry(self) -> (T::Id, T) {
-        let (id, item) = self.0.remove_entry();
+        let (id, item) = self.0.shift_remove_entry();
         (id.into(), item)
     }
 
@@ -65,7 +61,7 @@ impl<'a, T: 'a + Item> OccupiedEntry<'a, T> {
     ///
     /// ```
     /// use std::collections::HashMap;
-    /// use std::collections::hash_map::Entry;
+    /// use indexmap::map::Entry;
     ///
     /// let mut map: HashMap<&str, u32> = HashMap::new();
     /// map.entry("poneyland").or_insert(12);
@@ -90,7 +86,7 @@ impl<'a, T: 'a + Item> OccupiedEntry<'a, T> {
     ///
     /// ```
     /// use std::collections::HashMap;
-    /// use std::collections::hash_map::Entry;
+    /// use indexmap::map::Entry;
     ///
     /// let mut map: HashMap<&str, u32> = HashMap::new();
     /// map.entry("poneyland").or_insert(12);
@@ -122,7 +118,7 @@ impl<'a, T: 'a + Item> OccupiedEntry<'a, T> {
     ///
     /// ```
     /// use std::collections::HashMap;
-    /// use std::collections::hash_map::Entry;
+    /// use indexmap::map::Entry;
     ///
     /// let mut map: HashMap<&str, u32> = HashMap::new();
     /// map.entry("poneyland").or_insert(12);
@@ -145,7 +141,7 @@ impl<'a, T: 'a + Item> OccupiedEntry<'a, T> {
     ///
     /// ```
     /// use std::collections::HashMap;
-    /// use std::collections::hash_map::Entry;
+    /// use indexmap::map::Entry;
     ///
     /// let mut map: HashMap<&str, u32> = HashMap::new();
     /// map.entry("poneyland").or_insert(12);
@@ -167,7 +163,7 @@ impl<'a, T: 'a + Item> OccupiedEntry<'a, T> {
     ///
     /// ```
     /// use std::collections::HashMap;
-    /// use std::collections::hash_map::Entry;
+    /// use indexmap::map::Entry;
     ///
     /// let mut map: HashMap<&str, u32> = HashMap::new();
     /// map.entry("poneyland").or_insert(12);
@@ -180,7 +176,7 @@ impl<'a, T: 'a + Item> OccupiedEntry<'a, T> {
     /// ```
     #[inline]
     pub fn remove(self) -> T {
-        self.0.remove()
+        self.0.shift_remove()
     }
 
     /// Replaces the entry, returning the old key and value. The new key in the hash map will be
@@ -190,7 +186,7 @@ impl<'a, T: 'a + Item> OccupiedEntry<'a, T> {
     ///
     /// ```
     /// #![feature(map_entry_replace)]
-    /// use std::collections::hash_map::{Entry, HashMap};
+    /// use indexmap::map::{Entry, HashMap};
     /// use std::rc::Rc;
     ///
     /// let mut map: HashMap<Rc<String>, u32> = HashMap::new();
@@ -217,7 +213,7 @@ impl<'a, T: 'a + Item> OccupiedEntry<'a, T> {
     ///
     /// ```
     /// #![feature(map_entry_replace)]
-    /// use std::collections::hash_map::{Entry, HashMap};
+    /// use indexmap::map::{Entry, HashMap};
     /// use std::rc::Rc;
     ///
     /// let mut map: HashMap<Rc<String>, u32> = HashMap::new();
@@ -245,9 +241,7 @@ impl<'a, T: 'a + Item> OccupiedEntry<'a, T> {
 
 impl<'a, T: 'a + Item> VacantEntry<'a, T> {
     #[inline]
-    pub(crate) fn new(
-        inner: std::collections::hash_map::VacantEntry<'a, u64, T>,
-    ) -> Self {
+    pub(crate) fn new(inner: indexmap::map::VacantEntry<'a, u64, T>) -> Self {
         Self(inner)
     }
     /// Gets a reference to the key that would be used when inserting a value
@@ -272,7 +266,7 @@ impl<'a, T: 'a + Item> VacantEntry<'a, T> {
     ///
     /// ```
     /// use std::collections::HashMap;
-    /// use std::collections::hash_map::Entry;
+    /// use indexmap::map::Entry;
     ///
     /// let mut map: HashMap<&str, u32> = HashMap::new();
     ///
@@ -292,7 +286,7 @@ impl<'a, T: 'a + Item> VacantEntry<'a, T> {
     ///
     /// ```
     /// use std::collections::HashMap;
-    /// use std::collections::hash_map::Entry;
+    /// use indexmap::map::Entry;
     ///
     /// let mut map: HashMap<&str, u32> = HashMap::new();
     ///
@@ -314,7 +308,7 @@ impl<'a, T: 'a + Item> VacantEntry<'a, T> {
     /// ```
     /// #![feature(entry_insert)]
     /// use std::collections::HashMap;
-    /// use std::collections::hash_map::Entry;
+    /// use indexmap::map::Entry;
     ///
     /// let mut map: HashMap<&str, u32> = HashMap::new();
     ///

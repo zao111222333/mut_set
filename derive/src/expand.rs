@@ -374,7 +374,7 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
             impl #hash_impl_generics IntoIterator for #mut_set_ident #hash_ty_generics #where_clause {
                 type Item = #ident #ty_generics;
 
-                type IntoIter = std::collections::hash_map::IntoValues<u64, #ident #ty_generics>;
+                type IntoIter = mut_set::indexmap::map::IntoValues<u64, #ident #ty_generics>;
                 #[inline]
                 fn into_iter(self) -> Self::IntoIter {
                     self.0.into_iter()
@@ -382,7 +382,7 @@ pub fn readonly(args: TokenStream, input: DeriveInput) -> Result<TokenStream> {
             }
             impl #life_hash_impl_generics IntoIterator for &'a #mut_set_ident #hash_ty_generics #where_clause {
                 type Item = &'a #ident #ty_generics;
-                type IntoIter = std::collections::hash_map::Values<'a, u64, #ident #ty_generics>;
+                type IntoIter = mut_set::indexmap::map::Values<'a, u64, #ident #ty_generics>;
                 #[inline]
                 fn into_iter(self) -> Self::IntoIter {
                     (&self.0).into_iter()

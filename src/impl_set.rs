@@ -1,14 +1,13 @@
+use indexmap::{
+    map::{IntoValues, Values},
+    IndexMap,
+};
+
 use crate::MutSetDeref;
 
 use super::{Item, MutSet};
 use core::{borrow::Borrow, hash::BuildHasher, iter::Map};
-use std::{
-    collections::{
-        hash_map::{IntoValues, Values},
-        HashMap, HashSet, TryReserveError,
-    },
-    hash::RandomState,
-};
+use std::{collections::HashSet, hash::RandomState};
 impl<T: Item + Clone, S: BuildHasher + Clone> Clone for MutSet<T, S> {
     fn clone(&self) -> Self {
         Self {
@@ -38,14 +37,14 @@ impl<T: Item> MutSet<T, RandomState> {
     #[inline]
     pub fn new() -> Self {
         Self {
-            inner: HashMap::default(),
+            inner: IndexMap::default(),
             hasher: RandomState::new(),
         }
     }
     #[inline]
     pub fn with_capacity(capacity: usize) -> MutSet<T, RandomState> {
         Self {
-            inner: HashMap::with_capacity_and_hasher(capacity, Default::default()),
+            inner: IndexMap::with_capacity_and_hasher(capacity, Default::default()),
             hasher: RandomState::new(),
         }
     }
@@ -164,7 +163,10 @@ where
     /// set.try_reserve(10).expect("why is the test harness OOMing on a handful of bytes?");
     /// ```
     #[inline]
-    pub fn try_reserve(&mut self, additional: usize) -> Result<(), TryReserveError> {
+    pub fn try_reserve(
+        &mut self,
+        additional: usize,
+    ) -> Result<(), indexmap::TryReserveError> {
         self.inner.try_reserve(additional)
     }
 
@@ -428,9 +430,7 @@ where
     /// ```
     #[inline]
     pub fn insert(&mut self, item: T) -> bool {
-        if let std::collections::hash_map::Entry::Vacant(e) =
-            self.inner.entry(self.id(&item))
-        {
+        if let indexmap::map::Entry::Vacant(e) = self.inner.entry(self.id(&item)) {
             e.insert(item);
             true
         } else {
@@ -460,11 +460,11 @@ where
 
     #[inline]
     pub fn id_remove(&mut self, id: &T::Id) -> bool {
-        self.inner.remove(id.borrow()).is_some()
+        self.inner.shift_remove(id.borrow()).is_some()
     }
     #[inline]
     pub fn id_take(&mut self, id: &T::Id) -> Option<T> {
-        self.inner.remove(id.borrow())
+        self.inner.shift_remove(id.borrow())
     }
     #[inline]
     pub fn id_entry<DefaultF: FnOnce() -> T>(
@@ -473,10 +473,10 @@ where
         default_f: DefaultF,
     ) -> crate::Entry<'_, T, DefaultF> {
         match (&mut self.inner).entry(*id.borrow()) {
-            std::collections::hash_map::Entry::Occupied(inner) => {
+            indexmap::map::Entry::Occupied(inner) => {
                 crate::Entry::Occupied(crate::OccupiedEntry::new(inner))
             }
-            std::collections::hash_map::Entry::Vacant(inner) => {
+            indexmap::map::Entry::Vacant(inner) => {
                 crate::Entry::Vacant(crate::VacantEntry::new(inner), default_f)
             }
         }
@@ -524,7 +524,7 @@ where
 }
 
 pub type ValuesMut<'a, T> = Map<
-    std::collections::hash_map::ValuesMut<'a, u64, T>,
+    indexmap::map::ValuesMut<'a, u64, T>,
     fn(&mut T) -> &mut <T as MutSetDeref>::Target,
 >;
 impl<T, S> MutSet<T, S>
@@ -633,7 +633,7 @@ where
     // /// assert!(set.is_empty());
     // /// ```
     // #[inline]
-    // pub fn drain(&mut self) -> std::collections::hash_map::Drain<'_, u64, T> {
+    // pub fn drain(&mut self) -> mut_set::indexmap::map::Drain<'_, u64, T> {
     //     // Drain { base: self.base.drain() }
     //     self.inner.drain().into_iter().collect()
     // }
@@ -755,7 +755,7 @@ where
     // #[stable(feature = "hashmap_build_hasher", since = "1.7.0")]
     // #[rustc_const_unstable(feature = "const_collections_with_hasher", issue = "102575")]
     pub fn with_hasher(hasher: S) -> MutSet<T, S> {
-        MutSet { inner: HashMap::default(), hasher }
+        MutSet { inner: IndexMap::default(), hasher }
     }
 
     /// Creates an empty `HashSet` with at least the specified capacity, using
@@ -786,7 +786,7 @@ where
     #[inline]
     pub fn with_capacity_and_hasher(capacity: usize, hasher: S) -> MutSet<T, S> {
         MutSet {
-            inner: HashMap::with_capacity_and_hasher(
+            inner: IndexMap::with_capacity_and_hasher(
                 capacity,
                 crate::NoHashBuildHasher::new(),
             ),

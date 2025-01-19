@@ -1,19 +1,16 @@
 // cargo expand --manifest-path ./tests/Cargo.toml basic
-
 #[derive(Debug, Default, Clone)]
 #[derive(serde::Serialize, serde::Deserialize)]
-#[mut_set::derive::item]
 #[serde(bound = "T1: serde::Serialize + serde::de::DeserializeOwned")]
-pub(super) struct MyItem<T1, T2>
+#[mut_set::derive::item]
+pub(super) struct MyItem<T1>
 where
-    T1: Sized + Default,
-    T2: Sized + Default,
+    T1: Sized + Default + serde::Serialize + serde::de::DeserializeOwned,
 {
     #[id]
     #[size = 8]
     pub(self) id1: usize,
     pub(crate) ctx1: T1,
-    pub(super) ctx2: T2,
     #[id(borrow = "&str", with_ref = false)]
     #[size = 24]
     pub id2: String,
@@ -31,23 +28,16 @@ fn test() {
     use mut_set::Item;
     use std::ops::Deref;
 
-    let mut set = <MyItem<i32, String> as Item>::MutSet::<std::hash::RandomState>::from(
+    let mut set = <MyItem<i32> as Item>::MutSet::<std::hash::RandomState>::from(
         mut_set::MutSet::new(),
     );
     set.insert(MyItem {
         id1: 2,
         id2: "www".to_string(),
         ctx1: -1,
-        ctx2: "ccc".to_string(),
         id3: None,
     });
-    set.insert(MyItem {
-        id1: 1,
-        id2: "ww".to_string(),
-        ctx1: -2,
-        ctx2: "cc".to_string(),
-        id3: None,
-    });
+    set.insert(MyItem { id1: 1, id2: "ww".to_string(), ctx1: -2, id3: None });
     println!("{:?}", set);
     for v in set.iter() {
         println!("{:?}", v);
@@ -60,13 +50,7 @@ fn test() {
     }
     println!("{:?}", set.deref());
     println!("{:?}", set.get(&2, "www", None));
-    set.replace(MyItem {
-        id1: 1,
-        id2: "ww".to_string(),
-        ctx1: -2,
-        ctx2: "cc".to_string(),
-        id3: None,
-    });
+    set.replace(MyItem { id1: 1, id2: "ww".to_string(), ctx1: -2, id3: None });
     // let a = Some("".to_string());
     // let b: Option<&str> = a.as_ref().map(|s| s.borrow());
     // let s = "".to_string();

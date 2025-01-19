@@ -1,6 +1,8 @@
+use indexmap::map::Values;
+
 use crate::{Item, MutSet};
 use core::{fmt, hash::BuildHasher, iter::Chain};
-use std::{collections::hash_map::Values, iter::FusedIterator};
+use std::iter::FusedIterator;
 
 /// A lazy iterator producing elements in the intersection of `HashSet`s.
 ///

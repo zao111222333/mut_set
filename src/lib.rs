@@ -54,6 +54,7 @@
 //!}
 //!
 //! ```
+pub use indexmap;
 pub mod check_fn;
 mod impl_difference;
 mod impl_entry;
@@ -68,7 +69,7 @@ pub mod derive {
 use core::{borrow::Borrow, hash::BuildHasher, ops::Deref};
 pub use impl_entry::{Entry, OccupiedEntry, VacantEntry};
 pub use impl_set::ValuesMut;
-use std::{collections::HashMap, hash::RandomState, ops::DerefMut};
+use std::{hash::RandomState, ops::DerefMut};
 /// See more at [![github](https://img.shields.io/badge/github-main-blue?logo=github)](https://github.com/zao111222333/mut_set)
 /// ```
 ///#[derive(Debug)]
@@ -126,7 +127,7 @@ use std::{collections::HashMap, hash::RandomState, ops::DerefMut};
 /// ```
 pub struct MutSet<T: Item, S: BuildHasher = RandomState> {
     hasher: S,
-    inner: HashMap<u64, T, NoHashBuildHasher>,
+    inner: indexmap::IndexMap<u64, T, NoHashBuildHasher>,
 }
 
 #[derive(Debug, Clone, Copy, Default)]

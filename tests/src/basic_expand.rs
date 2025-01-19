@@ -200,7 +200,7 @@ mod __my_item {
         T2: Sized + Default,
     {
         type Item = MyItem<T1, T2>;
-        type IntoIter = std::collections::hash_map::IntoValues<u64, MyItem<T1, T2>>;
+        type IntoIter = mut_set::indexmap::map::IntoValues<u64, MyItem<T1, T2>>;
         #[inline]
         fn into_iter(self) -> Self::IntoIter {
             self.0.into_iter()
@@ -212,7 +212,7 @@ mod __my_item {
         T2: Sized + Default,
     {
         type Item = &'a MyItem<T1, T2>;
-        type IntoIter = std::collections::hash_map::Values<'a, u64, MyItem<T1, T2>>;
+        type IntoIter = mut_set::indexmap::map::Values<'a, u64, MyItem<T1, T2>>;
         #[inline]
         fn into_iter(self) -> Self::IntoIter {
             (&self.0).into_iter()
