@@ -1,43 +1,28 @@
 // cargo expand --manifest-path ./tests/Cargo.toml basic
-#[derive(Debug, Default, Clone)]
-#[derive(serde::Serialize, serde::Deserialize)]
-#[serde(bound = "T1: serde::Serialize + serde::de::DeserializeOwned")]
+#[inline]
+const fn f64_into_hash_ord_fn(val: &f64) -> ordered_float::OrderedFloat<f64> {
+    ordered_float::OrderedFloat(*val)
+}
+
+#[derive(Debug)]
 #[mut_set::derive::item]
-pub(super) struct MyItem<T1>
-where
-    T1: Sized + Default + serde::Serialize + serde::de::DeserializeOwned,
-{
+pub(super) struct MyItem<T1> {
     #[id]
-    #[size = 8]
     pub(self) id1: usize,
     pub(crate) ctx1: T1,
-    #[id(borrow = "&str", with_ref = false)]
-    #[size = 24]
-    pub id2: String,
-    #[id(
-        borrow = "Option<&str>",
-        check_fn = "mut_set::borrow_option!",
-        with_ref = false
-    )]
-    #[size = 24]
+    #[id(into_hash_ord_fn = f64_into_hash_ord_fn)]
+    pub id2: f64,
+    #[id]
     pub id3: Option<String>,
 }
 
 #[test]
 fn test() {
-    use mut_set::Item;
-    use std::ops::Deref;
+    use mut_set::MutSetExt;
 
-    let mut set = <MyItem<i32> as Item>::MutSet::<std::hash::RandomState>::from(
-        mut_set::MutSet::new(),
-    );
-    set.insert(MyItem {
-        id1: 2,
-        id2: "www".to_string(),
-        ctx1: -1,
-        id3: None,
-    });
-    set.insert(MyItem { id1: 1, id2: "ww".to_string(), ctx1: -2, id3: None });
+    let mut set = indexmap::IndexSet::new();
+    set.insert(MyItem { id1: 2, id2: 4.2, ctx1: -1, id3: None });
+    set.insert(MyItem { id1: 1, id2: 3.2, ctx1: -2, id3: None });
     println!("{:?}", set);
     for v in set.iter() {
         println!("{:?}", v);
@@ -48,14 +33,10 @@ fn test() {
         // In `iter_mut` IDs write will be prohibited
         // v.id1 = 0;
     }
-    println!("{:?}", set.deref());
-    println!("{:?}", set.get(&2, "www", None));
-    set.replace(MyItem { id1: 1, id2: "ww".to_string(), ctx1: -2, id3: None });
-    // let a = Some("".to_string());
-    // let b: Option<&str> = a.as_ref().map(|s| s.borrow());
-    // let s = "".to_string();
-    // let b: &str = s.borrow();
-    println!("{:?}", set.deref());
+    println!("{:?}", set);
+    println!("{:?}", set.get(&MyItemId::new(2, 4.2, None)));
+    set.replace(MyItem { id1: 1, id2: 3.2, ctx1: -2, id3: None });
+    println!("{:?}", set);
     for v in set.into_iter() {
         println!("{:?}", v);
     }

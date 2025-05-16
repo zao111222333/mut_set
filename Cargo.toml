@@ -11,16 +11,15 @@ repository.workspace = true
 documentation.workspace = true
 
 [workspace.package]
-version = "0.7.0"
-rust-version = "1.83"
-edition = "2021"
+version = "0.8.1"
+edition = "2024"
 license = "MIT"
 authors = ["Junzhuo <zhou@junzhuo.site>"]
 description = "A safe implementation for HashSet with iter_mut and get_mut"
 keywords = [
     "hashset",
-    "mutable",
     "iter_mut",
+    "get_mut",
 ]
 readme = "README.md"
 repository = "https://github.com/zao111222333/mut_set"
@@ -30,14 +29,8 @@ documentation = "https://docs.rs/mut_set"
 [workspace]
 members = ["derive", "tests"]
 
-[features]
-default = []
-map_entry_replace = []
-entry_insert = []
-__dbg_disable_mem_layout = ["mut_set_derive/__dbg_disable_mem_layout"]
-
 [dependencies]
 serde = { version = "1.0" }
-mut_set_derive = { path = "derive" }
-indexmap = { version = "2.7", features = ["serde"] }
-# mut_set_derive = "0.7.0"
+# mut_set_derive = { path = "derive" }
+mut_set_derive = "0.8.1"
+indexmap = ">=2.8"
