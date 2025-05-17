@@ -3,7 +3,7 @@ use quote::{ToTokens, quote};
 use syn::parse::Parse;
 use syn::visit_mut::{self, VisitMut};
 use syn::{
-    Data, DeriveInput, Error, Expr, Field, Fields, Ident, Path, Result, Token,
+    Data, DeriveInput, Error, Expr, Field, Fields, Ident, Path, Result, Token, Type,
     Visibility, parse_quote, token,
 };
 
@@ -468,7 +468,7 @@ fn rearange_test() {
         where
             T1: Sized,
         {
-            #[id]
+            #[id(borrow = [String])]
             pub(self) id1: usize,
             pub(crate) ctx1: T1,
             pub ctx2: T2,
@@ -480,6 +480,9 @@ fn rearange_test() {
     let id_field_type = rearange_by_id(&mut input, &mut errors);
     println!("{}", input.into_token_stream().to_string());
     for (field, _type) in id_field_type {
+        if let Some(borrow_type) = _type.borrow_type {
+            println!("{}", borrow_type.to_token_stream());
+        }
         if let Some(expr) = _type.into_hash_ord_fn {
             println!("{}", expr.to_token_stream().to_string());
         }
@@ -489,7 +492,7 @@ fn rearange_test() {
 
 #[derive(Clone, Default)]
 struct BorrowType {
-    borrow_type: Option<Expr>,
+    borrow_type: Option<Type>,
     into_hash_ord_fn: Option<Expr>,
 }
 

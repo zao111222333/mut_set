@@ -11,7 +11,7 @@ repository.workspace = true
 documentation.workspace = true
 
 [workspace.package]
-version = "0.8.1"
+version = "0.8.2"
 edition = "2024"
 license = "MIT"
 authors = ["Junzhuo <zhou@junzhuo.site>"]
@@ -31,6 +31,6 @@ members = ["derive", "tests"]
 
 [dependencies]
 serde = { version = "1.0" }
-# mut_set_derive = { path = "derive" }
-mut_set_derive = "0.8.1"
+mut_set_derive = { path = "derive" }
+# mut_set_derive = "=0.8.2"
 indexmap = ">=2.8"
