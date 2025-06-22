@@ -34,7 +34,7 @@ mod __my_item {
     use mut_set::Item as _;
     #[doc(hidden)]
     #[repr(C)]
-    pub(in super::super) struct ImmutIdMyItem<T1> {
+    pub(in super::super) struct IdReadonlyMyItem<T1> {
         id1: usize,
         id2: f64,
         id3: Option<String>,
@@ -88,6 +88,11 @@ mod __my_item {
             unsafe { &*(self as *const Self as *const MyItemId) }
         }
     }
+    impl<T1> Borrow<MyItemId> for IdReadonlyMyItem<T1> {
+        fn borrow(&self) -> &MyItemId {
+            unsafe { &*(self as *const Self as *const MyItemId) }
+        }
+    }
     #[doc(hidden)]
     impl<T1> Hash for MyItem<T1> {
         #[inline]
@@ -119,13 +124,13 @@ mod __my_item {
     }
     impl<T1> mut_set::Item for MyItem<T1> {
         type Id = MyItemId;
-        type ImmutIdItem = ImmutIdMyItem<T1>;
+        type IdReadonlyItem = IdReadonlyMyItem<T1>;
         #[expect(invalid_reference_casting)]
-        fn __unsafe_deref_mut(&self) -> &mut Self::ImmutIdItem {
-            unsafe { &mut *(self as *const Self as *mut Self::ImmutIdItem) }
+        unsafe fn __unsafe_deref_mut(&self) -> &mut Self::IdReadonlyItem {
+            unsafe { &mut *(self as *const Self as *mut Self::IdReadonlyItem) }
         }
     }
-    impl<T1> Deref for ImmutIdMyItem<T1> {
+    impl<T1> Deref for IdReadonlyMyItem<T1> {
         type Target = MyItem<T1>;
         #[inline]
         fn deref(&self) -> &Self::Target {

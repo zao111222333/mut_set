@@ -154,7 +154,7 @@ pub fn readonly(mut input: DeriveInput) -> Result<TokenStream> {
         ReplaceSelf::new(&self_path).visit_type_mut(&mut field.ty);
     }
 
-    readonly.ident = Ident::new(&format!("ImmutId{}", input.ident), call_site);
+    readonly.ident = Ident::new(&format!("IdReadonly{}", input.ident), call_site);
     id.ident = Ident::new(&format!("{}Id", input.ident), call_site);
     let readonly_ident = &readonly.ident;
     let id_ident = &id.ident;
@@ -289,10 +289,10 @@ pub fn readonly(mut input: DeriveInput) -> Result<TokenStream> {
             }
             impl #impl_generics mut_set::Item for #ident #ty_generics #where_clause {
                 type Id = #id_ident;
-                type ImmutIdItem = #readonly_ident #ty_generics;
+                type IdReadonlyItem = #readonly_ident #ty_generics;
                 #[expect(invalid_reference_casting)]
-                fn __unsafe_deref_mut(&self) -> &mut Self::ImmutIdItem {
-                    unsafe { &mut *(self as *const Self as *mut Self::ImmutIdItem) }
+                unsafe fn __unsafe_deref_mut(&self) -> &mut Self::IdReadonlyItem {
+                    unsafe { &mut *(self as *const Self as *mut Self::IdReadonlyItem) }
                 }
             }
             impl #impl_generics Deref for #readonly_ident #ty_generics #where_clause {

@@ -12,12 +12,12 @@ impl<T: Item, S: BuildHasher> MutSetExt<T> for HashSet<T, S> {
     where
         Self: 'a;
 
-    fn get_mut<Q>(&mut self, value: &Q) -> Option<&mut T::ImmutIdItem>
+    fn get_mut<Q>(&mut self, value: &Q) -> Option<&mut T::IdReadonlyItem>
     where
         T: Borrow<Q>,
         Q: ?Sized + Hash + Eq,
     {
-        self.get(value).map(Item::__unsafe_deref_mut)
+        self.get(value).map(|item| unsafe { item.__unsafe_deref_mut() })
     }
 
     fn iter_mut(&mut self) -> Self::IterMut<'_> {
@@ -30,9 +30,9 @@ pub struct IterMut<'a, T: Item> {
 }
 
 impl<'a, T: Item> Iterator for IterMut<'a, T> {
-    type Item = &'a mut T::ImmutIdItem;
+    type Item = &'a mut T::IdReadonlyItem;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next().map(Item::__unsafe_deref_mut)
+        self.inner.next().map(|item| unsafe { item.__unsafe_deref_mut() })
     }
 }

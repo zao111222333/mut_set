@@ -17,7 +17,7 @@ pub trait MutSetExt<T: Item> {
     type IterMut<'a>
     where
         Self: 'a;
-    fn get_mut<Q>(&mut self, value: &Q) -> Option<&mut T::ImmutIdItem>
+    fn get_mut<Q>(&mut self, value: &Q) -> Option<&mut T::IdReadonlyItem>
     where
         T: Borrow<Q>,
         Q: ?Sized + Hash + Eq;
@@ -29,12 +29,18 @@ where
     Self: Sized + Eq + Hash + Borrow<Self::Id>,
 {
     type Id;
-    type ImmutIdItem: Deref<Target = Self>;
+    type IdReadonlyItem: Deref<Target = Self>;
     fn id(&self) -> &Self::Id {
         self.borrow()
     }
+    fn id_readonly(&mut self) -> &mut Self::IdReadonlyItem {
+        unsafe { self.__unsafe_deref_mut() }
+    }
+    /// # Safety
+    ///
+    /// Only for internal usages
     #[expect(clippy::mut_from_ref)]
-    fn __unsafe_deref_mut(&self) -> &mut Self::ImmutIdItem;
+    unsafe fn __unsafe_deref_mut(&self) -> &mut Self::IdReadonlyItem;
 }
 
 #[derive(Debug, Clone, Copy, Default)]
